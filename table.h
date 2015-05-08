@@ -42,10 +42,10 @@ void changeFuncAddr(int table_index, int new_address); /* 名前表table_index�
 int searchTable(char *identifier, IdentifierKind kind);
 
 /* 名前表から情報を得るルーチン群 */
-IdentifierKind getTableKind(int index); /* 引数のインデックスに該当するエントリの識別子の種類を得る */
-RelAddr getVarRelAddr(int index);          /* アドレスを得る */
-LL1LL_Value getConstValue(int index);        /* 定数の値を得る */
-int getNumParams(int index);            /* 関数の仮引数の数を得る */
+IdentifierKind getTableKind(int table_index); /* 引数のインデックスに該当するエントリの識別子の種類を得る */
+RelAddr getVarRelAddr(int table_index);          /* アドレスを得る */
+LL1LL_Value getConstValue(int table_index);        /* 定数の値を得る */
+int getNumParams(int table_index);            /* 関数の仮引数の数を得る */
 
 /* ブロック関連のモジュール */
 void blockBegin(int first_address); /* ブロックの開始で呼ばれ, スタック型記憶領域を更新する */

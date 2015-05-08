@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "share.h"
+#include "table.h"
 
 typedef enum {
   /* プッシュ・ポップ */
