@@ -25,15 +25,15 @@ typedef enum {
 
 /* LL1LLの配列の構造体 */
 typedef struct {
-  int size;           /* 配列の要素数 */
-  int alloc_size;     /* 割り当てサイズ */
-  LL1LL_Value *array; /* 配列そのもの */
+  int size;                 /* 配列の要素数 */
+  int alloc_size;           /* 割り当てサイズ */
+  LL1LL_Value *array_value; /* 配列そのもの */
 } LL1LL_Array;
 
 /* LL1LLの文字列の構造体 */
 typedef struct {
-  LL1LL_Boolean is_literal; /* リテラルか否か */
-  char          *string;    /* 文字列そのもの */
+  LL1LL_Boolean is_literal;       /* リテラルか否か */
+  char          *string_value;    /* 文字列そのもの */
 } LL1LL_String;
 
 /* LL1LLのオブジェクトの構造体:双方向リスト */
@@ -41,8 +41,8 @@ typedef struct LL1LL_Object_tag {
   LL1LL_ObjectType type;  /* オブジェクトの種類 */
   unsigned int marked:1;  /* マークされたか(GC用) */
   union { /* 中身 */
-    LL1LL_Array  array;  
-    LL1LL_String string;
+    LL1LL_Array  ary;  
+    LL1LL_String str;
     /* LL1LL_Class class; comming soon! */
   } u;
   struct LL1LL_Object_tag *prev; /* 前の要素 */

@@ -7,6 +7,9 @@
 #include "share.h"
 #include "table.h"
 
+/* FIXME:長さは可変にしよう */
+#define MAX_CODE_SIZE (500) /* コードの最大長 */
+
 typedef enum {
   /* プッシュ・ポップ */
   LVM_PUSH_IMMEDIATE,   /* オペランドの値をスタックにプッシュ */
@@ -41,6 +44,16 @@ typedef enum {
   LVM_LESSTHAN_EQUAL,   /* (一つ下) <= (トップ) */
 } LVM_OpCode;
 
+/* 命令の構造体 */
+typedef struct {
+  LVM_OpCode opcode;    /* オペコード */
+  union {               /* オペランド */
+    RelAddr     address;    /* アドレス */
+    LL1LL_Value value;      /* 即値 */
+    int         jump_pc;    /* 飛び先アドレス */
+  } u;
+} LVM_Instruction;
+
 /* 命令生成 返り値は現在のプログラムカウンタ(pc) */
 int genCodeValue(LVM_OpCode opcode, LL1LL_Value);     /* オペランドには値. */
 int genCodeTable(LVM_OpCode opcode, int table_index); /* オペランドには記号表のインデックス */
@@ -49,6 +62,6 @@ int genCodeReturn(void);                              /* return命令の生成 *
 void backPatch(int program_count);                    /* 引数のプログラムカウンタの命令をバックパッチ. 飛び先はこの関数を呼んだ次の命令. */
 int nextCode(void);                                   /* 次のプログラムカウンタを返す */
 
-void execute(void);                                   /* 仮想言語を実行 */
+LVM_Instruction *get_instraction(void);               /* 命令列のポインタを得る */
 
 #endif /* LVM_H_INCLUDED */
