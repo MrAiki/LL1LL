@@ -6,6 +6,7 @@
 #include "MEM.h"
 #include "share.h"
 #include "generate.h"
+#include "heap.h"
 
 /* FIXME:こいつも可変にしましょう */
 #define MAX_EXE_STACK_SIZE (3000)     /* 実行時スタックの最大サイズ */

@@ -1,8 +1,20 @@
-#ifndef SHARE_H_INCLUDED
+#ifndef SHARE_H_INCLUDED--top].u.
 #define SHARE_H_INCLUDED
 
 /* エラー時の文字列バッファの長さ */
 #define LINE_BUF_SIZE (100)
+/* ブロックの最大深さ FIXME:こっちも動的確保できるように修正 */
+#define MAX_BLOCK_LEVEL (20)   
+
+/* 文字列型を判定するマクロ */
+#define is_string(value) \
+  ((value.type == LL1LL_OBJECT_TYPE) && (value.u->object.type == STRING_OBJECT))
+/* 文字列のポインタを得る */
+#define get_string_value(value) \
+  (value.u->object.u.str.string_value)
+/* 配列型を判定するマクロ */
+#define is_array(value) \
+  ((value.type == LL1LL_OBJECT_TYPE) && (value.u->object.type == ARRAY_OBJECT))
 
 /* LL1LLの値の不完全型宣言(配列で参照される...) */
 typedef struct LL1LL_Value_tag *LL1LL_Value;
@@ -15,6 +27,12 @@ typedef enum {
   LL1LL_OBJECT_TYPE,  /* 参照型(配列や文字列など, ポインタを介するもの) */
   LL1LL_NULL_TYPE,    /* NULL型 */
 } LL1LL_TypeKind;
+
+/* LL1LLの論理型：実体は列挙型 */
+typedef enum {
+  LL1LL_FALSE = 0,  /* 偽 */
+  LL1LL_TRUE  = 1,  /* 真 */
+} LL1LL_Boolean;
 
 /* LL1LLのオブジェクトの種類 */
 typedef enum {
@@ -48,12 +66,6 @@ typedef struct LL1LL_Object_tag {
   struct LL1LL_Object_tag *prev; /* 前の要素 */
   struct LL1LL_Object_tag *next; /* 次の要素 */
 } LL1LL_Object;
-
-/* LL1LLの論理型：実体は列挙型 */
-typedef enum {
-  LL1LL_FALSE = 0,  /* 偽 */
-  LL1LL_TRUE  = 1,  /* 真 */
-} LL1LL_Boolean;
 
 /* LL1LLの値の構造体 */
 typedef struct LL1LL_Value_tag {

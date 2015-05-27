@@ -68,7 +68,7 @@ static void toplevel()
 
 /* 変数定義のコンパイル 
  * => 後に宣言にも対応するかもしれない... */
-static void varDecl()
+static void varDecl(void)
 {
   while (1) {
     /* IDENTIFIER -> ASSIGNの並びを確認 */
