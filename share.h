@@ -1,4 +1,4 @@
-#ifndef SHARE_H_INCLUDED--top].u.
+#ifndef SHARE_H_INCLUDED
 #define SHARE_H_INCLUDED
 
 /* エラー時の文字列バッファの長さ */
@@ -68,7 +68,7 @@ typedef struct LL1LL_Object_tag {
 } LL1LL_Object;
 
 /* LL1LLの値の構造体 */
-typedef struct LL1LL_Value_tag {
+struct LL1LL_Value_tag {
   LL1LL_TypeKind type;  /* 型 */
   union {
     int           int_value;      /* 整数値 */

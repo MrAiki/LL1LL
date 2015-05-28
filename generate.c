@@ -37,6 +37,7 @@ int genCodeCalc(LVM_OpCode opcode)
   return current_code_size;
 }
 
+/* TODO:return命令の生成 */
 int genCodeReturn(void)
 {
 }
