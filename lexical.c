@@ -39,6 +39,7 @@ static Keyword_table_entry keyword_table[] = {
   {">", GREATER}, {">=", GREATER_EQUAL},
   {"<", LESSTHAN}, {"<=", LESSTHAN_EQUAL},
   {"+", PLUS}, {"-", MINUS}, {"*", MUL}, {"/", DIV}, {"%", MOD},
+  {"**", POWER},
   {"++", INCREMENT}, {"--", DECREMENT},
   {"!", LOGICAL_NOT},
   {"\"", DOUBLE_QUOTE},
@@ -289,6 +290,10 @@ Token nextToken(void)
           nextchar = nextChar();
           temp_token.kind = MUL_ASSIGN;
           break;
+        case '*' : /* "**" */
+          nextchar = nextChar();
+          temp_token.kind = POWER;
+          break;
         default:  /* '*' */
           temp_token.kind = MUL;
           break;
@@ -490,7 +495,7 @@ Token checkGetToken2(Token token, Token_kind kind1, Token_kind kind2)
     return nextToken();
   } else {
     /* 一致していなければエラー */
-    if (kind == OTHERS) {
+    if (token.kind == OTHERS) {
       /* 無効なトークン */
       compile_error(INVAILD_CHAR_ERROR, line_number);
     }

@@ -5,6 +5,7 @@
 #include <string.h>
 #include "share.h"
 #include "lexical.h"
+#include "error.h"
 
 extern int line_number; /* 現在コンパイル中の行数 */
 

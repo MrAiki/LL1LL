@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 #include "share.h"
+#include "error.h"
 
 /* 一回のfgetsで取得する最大文字数 */
 #define MAX_LEN_SOURCE_LINE    (200)
@@ -48,6 +49,7 @@ typedef enum token_kind_tag {
   GREATER, GREATER_EQUAL,                   /* '>', ">=" */
   LESSTHAN, LESSTHAN_EQUAL,                 /* '<', "<=" */
   PLUS, MINUS, MUL, DIV, MOD, LOGICAL_NOT,  /* '+', '-', '*', '/', '%', '!' */
+  POWER,                                    /* "**" */
   INCREMENT, DECREMENT,                     /* "++", "--" */
   DOUBLE_QUOTE,                             /* 文字列境界 '"' */
   END_OF_KEYSYMBOL,                         /* ここまで予約シンボル. 番兵に使う */
