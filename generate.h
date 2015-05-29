@@ -9,7 +9,7 @@
 #include "table.h"
 
 /* FIXME:長さは可変にしよう */
-#define MAX_CODE_SIZE (500) /* コードの最大長 */
+#define MAX_CODE_SIZE (1000) /* コードの最大長 */
 
 /* 命令語の種類 */
 typedef enum {

@@ -37,9 +37,21 @@ int genCodeCalc(LVM_OpCode opcode)
   return current_code_size;
 }
 
-/* TODO:return命令の生成 */
+/* return命令の生成 */
 int genCodeReturn(void)
 {
+  /* 直前の命令がreturnならば, 連続returnになるので
+   * すぐに終わる */
+  if (code[current_code_size].opcode == RETURN) 
+    return current_code_size;
+
+  /* コードサイズを確認してから命令生成 */
+  /* オペランドのブロックレベルやパラメタ数は, table.hからの情報を使う */
+  checkCodeSize();
+  code[current_code_size].opcode = RETURN;
+  code[current_code_size].u.address.block_level = getBlockLevel();
+  code[current_code_size].u.address.address     = getCurrentNumParams();
+  return current_code_size;
 }
 
 /* 現在のコードサイズをチェック.
@@ -51,7 +63,7 @@ static void checkCodeSize(void)
     return;
   } else {
     /* TODO:可変にして, メモリの限界まで使えるように */
-    fprintf(stderr, "Too many codes... TODO:Code size should be expand \n");
+    fprintf(stderr, "Too many codes... TODO:Code size should be able to expand \n");
     exit(1);
   }
 }
@@ -64,7 +76,7 @@ void backPatch(int program_count)
 }
 
 /* 命令列の最初の要素へのポインタを得る */
-LVM_Instruction *get_instraction(void)
+LVM_Instruction *get_instruction(void)
 {
   return &(code[0]);
 }

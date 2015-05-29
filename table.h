@@ -6,7 +6,7 @@
 
 #include "share.h"
 
-#define MAX_BLOCK_LEVEL (20)   /* ブロックの最大深さ FIXME:こっちも動的確保できるように修正 */
+#define MAX_TABLE_SIZE  (200)  /* 名前表の最大長 FIXME:メモリの限界まで伸ばせるように */
 
 /* スタック型の記憶域を管理するモジュール群 */
 
@@ -21,7 +21,7 @@ typedef enum {
 /* 変数, 仮引数, 関数の, スタック型記憶域のアドレス */
 typedef struct {
   int block_level;  /* ブロックのレベル */
-  int address;      /* ブロック内でのアドレス */
+  int address;      /* ブロック内でのアドレス(変数,定数),もしくは処理内容の先頭pc(関数) */
 } RelAddr;
 
 /* 公開モジュール群 */
@@ -29,7 +29,7 @@ typedef struct {
 /* 名前表に名前を登録. 名前表追加系関数では必ず呼ばれ, 名前表エントリ数の増加も暗黙で行う */
 void addTableName(char *identifier);  
 /* 名前表登録ルーチン. 返り値は現在のエントリ数 */
-int addTableFunc(char *identifier, int address); /* 名前表に関数を登録. ブロック内でのアドレスを与える */
+int addTableFunc(char *identifier, int address); /* 名前表に関数を登録. 先頭pcを与える */
 int addTableParam(char *identifier); /* 名前表に仮引数を登録. */
 int addTableVar(char *identifier);                  /* 名前表に変数と, その値を登録 */
 int addTableConst(char *identifier, LL1LL_Value v); /* 名前表に定数と, その値を登録 */

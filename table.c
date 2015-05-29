@@ -1,7 +1,5 @@
 #include "table.h"
 
-#define MAX_TABLE_SIZE  (200)  /* 名前表の最大長 FIXME:メモリの限界まで伸ばせるように */
-
 /* 名前表のエントリ */
 typedef struct {
   IdentifierKind kind;  /* 識別子の種類 */
@@ -10,9 +8,9 @@ typedef struct {
   union {
     RelAddr     rel_address;  /* 変数の場合:スタック型記憶域のアドレス */
     LL1LL_Value value;        /* 定数の場合:値 */
-    struct {                  /* 関数の場合 */
-      RelAddr rel_address;    /* 記憶域のアドレス */
-      int     num_parameter;  /* 仮引数の数 */
+    struct {                   /* 関数の場合 */
+      RelAddr rel_address;     /* 記憶域のアドレス */
+      int     num_parameter;   /* 仮引数の数 */
     } f;
   } u;
 } NameTableEntry;
