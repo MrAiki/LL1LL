@@ -69,7 +69,7 @@ void execute(void)
                 + inst.u.address.address] = stack[--top];
         break;
       case LVM_POP:
-        /* 単純にトップをずらすだけ */
+        /* 単純にトップを一つずらすだけ */
         top--;
         break;
       case LVM_DUPLICATE:
@@ -123,7 +123,10 @@ void execute(void)
       case LVM_SUB:         /* FALLTHRU */
       case LVM_MUL:         /* FALLTHRU */
       case LVM_DIV:         /* FALLTHRU */
-      case LVM_MOD:
+      case LVM_MOD:         /* FALLTHRU */
+      case LVM_POW:         /* FALLTHRU */
+      case LVM_LOGICAL_AND: /* FALLTHRU */
+      case LVM_LOGICAL_OR:
         top--;
         stack[top-1] 
           = do_calculate(stack[top-1], stack[top], inst.opcode);
@@ -336,6 +339,10 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
         }
+      } else if (is_string(left)
+                 && right.type == LL1LL_INT_TYPE) {
+        /* 左辺がstring, 右辺がint */
+        /* -> 文字列を整数回繰り返す */
       } else {
         /* 積算の型エラー */
         fprintf(stderr, "Error! Invailed type in mul \n");
@@ -389,14 +396,78 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がint, 右辺がdouble */
         ret_value.type = LL1LL_DOUBLE_TYPE;
-        ret_value.u.double_value = fmod((double)left.u.int_value, right.u.int_value);
+        ret_value.u.double_value = fmod((double)left.u.int_value, right.u.double_value);
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がdouble, 右辺がdouble */
         ret_value.u.double_value = fmod(left.u.double_value, right.u.double_value);
       } else {
         /* 除算の型エラー */
-        fprintf(stderr, "Error! Invailed type in div \n");
+        fprintf(stderr, "Error! Invailed type in mod \n");
+        exit(1);
+      }
+      break;
+    case LVM_POW:
+      /* 累乗 */
+      if (left.type == LL1LL_INT_TYPE 
+          && right.type == LL1LL_INT_TYPE) {
+        /* 左辺がint, 右辺がint */
+        if (left.u.int_value == 0) {
+          fprintf(stderr, "Zero power detected! \n");
+          exit(1);
+        }
+        ret_value.u.int_value = (int)pow((double)left.u.int_value,
+                                         (double)right.u.int_value);
+      } else if (left.type == LL1LL_DOUBLE_TYPE
+                 && right.type == LL1LL_INT_TYPE) {
+        /* 左辺がdouble, 右辺がint */
+        ret_value.u.double_value = pow(left.u.double_value,
+                                       (double)right.u.int_value);
+      } else if (left.type == LL1LL_INT_TYPE
+                 && right.type == LL1LL_DOUBLE_TYPE) {
+        /* 左辺がint, 右辺がdouble */
+        ret_value.type = LL1LL_DOUBLE_TYPE;
+        ret_value.u.double_value = pow((double)left.u.int_value,
+                                       right.u.double_value);
+      } else if (left.type == LL1LL_DOUBLE_TYPE
+                 && right.type == LL1LL_DOUBLE_TYPE) {
+        /* 左辺がdouble, 右辺がdouble */
+        ret_value.u.double_value = pow(left.u.double_value,
+                                       right.u.double_value);
+      } else {
+        /* 累乗の型エラー */
+        fprintf(stderr, "Error! Invailed type in pow \n");
+        exit(1);
+      }
+    case LVM_LOGICAL_AND:
+      /* 論理積 */
+      if (left.type == LL1LL_BOOLEAN_TYPE 
+          && right.type == LL1LL_BOOLEAN_TYPE) {
+        /* 左辺がboolean, 右辺がboolean */
+        if (left.u.boolean_value == LL1LL_FALSE) {
+          ret_value.u.boolean_value = LL1LL_FALSE;
+        } else {
+          ret_value.u.boolean_value = right.u.boolean_value;
+        }
+      } else {
+        /* 論理積の型エラー */
+        fprintf(stderr, "Error! Invailed type in logical and \n");
+        exit(1);
+      }
+      break;
+    case LVM_LOGICAL_OR:
+      /* 論理和 */
+      if (left.type == LL1LL_BOOLEAN_TYPE 
+          && right.type == LL1LL_BOOLEAN_TYPE) {
+        /* 左辺がboolean, 右辺がboolean */
+        if (left.u.boolean_value == LL1LL_TRUE) {
+          ret_value.u.boolean_value = LL1LL_TRUE;
+        } else {
+          ret_value.u.boolean_value = right.u.boolean_value;
+        }
+      } else {
+        /* 論理積の型エラー */
+        fprintf(stderr, "Error! Invailed type in logical and \n");
         exit(1);
       }
       break;
@@ -712,4 +783,3 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
   return ret_value;
 
 }
-            
