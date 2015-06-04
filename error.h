@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 #include <stdarg.h> /* 可変長引数の取得 */
 #include <assert.h>
 
@@ -19,6 +20,9 @@ typedef enum {
 typedef struct {
   char *format_string;
 } MessageFormat;
+
+/* エラーフォーマットの取得 */
+extern MessageFormat compile_error_message_format[];
 
 /* コンパイルエラーの出力 */
 void compile_error(CompileError error_id, int line_number,  ...);

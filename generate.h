@@ -69,6 +69,7 @@ int genCodeCalc(LVM_OpCode opcode);                   /* 演算命令の生成 *
 int genCodeJump(LVM_OpCode opcode, int jump_pc);      /* jump系命令の生成 */
 int genCodeReturn(void);                              /* return命令の生成 */
 void backPatch(int program_count);                    /* 引数のプログラムカウンタの命令をバックパッチ. 飛び先はこの関数を呼んだ次の命令. */
+void changeJumpPc(int pc, int jump_pc);               /* pcのジャンプ命令の飛び先をjump_pcに変更する */
 int nextCode(void);                                   /* 次のプログラムカウンタを返す */
 
 LVM_Instruction *get_instruction(void);               /* 命令列のポインタを得る */

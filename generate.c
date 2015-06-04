@@ -84,6 +84,12 @@ void backPatch(int program_count)
   code[program_count].u.jump_pc = current_code_size + 1;
 }
 
+/* pcのジャンプ命令の飛び先をjump_pcに変更する */
+void changeJumpPc(int pc, int jump_pc);
+{
+  code[pc].u.jump_pc = jump_pc;
+}
+
 /* 命令列の最初の要素へのポインタを得る */
 LVM_Instruction *get_instruction(void)
 {

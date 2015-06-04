@@ -10,6 +10,7 @@ static void varDecl(void);                /* 変数定義のコンパイル */
 static void constDecl(void);              /* 定数定義のコンパイル */
 static void funcDecl(void);               /* 関数定義のコンパイル */
 static void statement(void);              /* 文のコンパイル */
+static void assign_statement(void);        /* 代入文のコンパイル */
 static void if_statement(void);           /* if文のコンパイル */
 static void switch_statement(void);       /* switch文のコンパイル */
 static void for_statement(void);          /* for文のコンパイル */
@@ -18,7 +19,7 @@ static void do_while_statement(void);     /* do while文のコンパイル */
 static void block(void);                  /* ブロックのコンパイル */
 static void comma_expression(void);       /* コンマ式のコンパイル */
 static void expression(void);             /* 式のコンパイル */
-static void logical_or_expression(void);  /* 論理OR式のコンパイル */
+// static void logical_or_expression(void);  /* 論理OR式のコンパイル */
 static void logical_and_expression(void); /* 論理AND式のコンパイル */
 static void equal_expression(void);       /* 等号, 不等号式のコンパイル */
 static void compare_expression(void);     /* 不等式のコンパイル */
@@ -272,7 +273,17 @@ static void block(void)
 static void statement(void)
 {
 
+  int tmp_label;          /* break, continue用の仮ラベル */
+  int table_index;        /* 代入文用のテーブルインデックス */
+
   switch (token.kind) {
+    case IDENTIFIER:
+      /* 代入文のコンパイルへ */
+      table_index = searchTable(token.u.identifier, VAR_IDENTIFIER);
+      assign_statement(table_index);
+      token = nextToken();
+      assign_statement();
+      break;
     case IF:
       /* if文のコンパイルへ */
       token = nextToken();
@@ -300,6 +311,8 @@ static void statement(void)
       break;
     case CONTINUE:
       /* continue文のコンパイル */
+      tmp_label = genCodeJump(LVM_JUMP, 0);
+      addContinueLabel(tmp_label);
       token = nextToken();
       /* ';'は省略可能に */
       if (token.kind == SEMICOLON) {
@@ -309,6 +322,8 @@ static void statement(void)
       break;
     case BREAK:
       /* break文のコンパイル */
+      tmp_label = genCodeJump(LVM_JUMP, 0);
+      addBreakLabel(tmp_label);
       token = nextToken();
       /* ';'は省略可能に */
       if (token.kind == SEMICOLON) {
@@ -341,6 +356,70 @@ static void statement(void)
 
 }
 
+/* 代入文のコンパイル */
+static void assign_statement(int table_index)
+{
+  /* 演算子の種類 */
+  Token_kind op_kind;
+  /* 識別子の種類 */
+  IdentifierKind id_kind = getTableKind(table_index);
+
+  /* 代入演算子 -> 式 */
+  if (token.kind == ASSIGN
+      || token.kind == ADD_ASSIGN
+      || token.kind == SUB_ASSIGN
+      || token.kind == MUL_ASSIGN
+      || token.kind == DIV_ASSIGN
+      || token.kind == MOD_ASSIGN) {
+    op_kind = token.kind;
+
+    /* 定数とか関数の識別子には代入できない */
+    if (id_kind != VAR_IDENTIFIER
+        && id_kind != PARAM_IDENTIFIER) {
+      fprintf(stderr, "Error! Cannot assign to constant/function identifier \n");
+      exit(1);
+    }
+    
+    /* 代入演算を行う場合は, まず変数値をスタックに積む */
+    if (op_kind != ASSIGN) {
+      genCodeTable(LVM_PUSH_VALUE, table_index);
+    }
+    
+    /* 右辺値（代入する値）のコンパイル */
+    token = nextToken();
+    comma_expression();
+
+    /* 代入演算の種類で場合分けし, 演算を行う */
+    switch (op_kind) {
+      case ASSIGN:
+        break;
+      case ADD_ASSIGN:
+        genCodeCalc(LVM_ADD);
+        break;
+      case SUB_ASSIGN:
+        genCodeCalc(LVM_SUB);
+        break;
+      case MUL_ASSIGN:
+        genCodeCalc(LVM_MUL);
+        break;
+      case ADD_ASSIGN:
+        genCodeCalc(LVM_DIV);
+        break;
+      case MOD_ASSIGN:
+        genCodeCalc(LVM_MOD);
+        break;
+    }
+    
+    /* 代入 */
+    genCodeTable(LVM_POP_VARIABLE, table_index);
+
+  } else {
+    /* 代入文ではなかった => 式のコンパイルへ移行 */
+    comma_expression();
+  }
+
+}
+
 /* if文のコンパイル */
 static void if_statement(void)
 {
@@ -365,7 +444,7 @@ static void if_statement(void)
   /* 中身を実行した -> if文の終わりに飛び越す
    * 終わりに飛び越すラベルの追加 */
   if_count++;
-  if_end_labels    = (int *)realloc(if_end_labels, sizeof(int) * if_count);
+  if_end_labels    = (int *)MEM_realloc(if_end_labels, sizeof(int) * if_count);
   if_end_labels[0] = genCodeJump(LVM_JUMP, 0);
 
 
@@ -388,7 +467,7 @@ static void if_statement(void)
 
     /* 中身を実行した -> if文の終わりに飛び越す */
     if_count++;
-    if_end_labels    = (int *)realloc(if_end_labels, sizeof(int) * if_count);
+    if_end_labels    = (int *)MEM_realloc(if_end_labels, sizeof(int) * if_count);
     if_end_labels[if_count-1] = genCodeJump(LVM_JUMP, 0);
 
     /* elsif条件が満たされない場合の飛び先にバックパッチ */
@@ -408,7 +487,7 @@ static void if_statement(void)
   for (if_i = 0; if_i < if_count; if_i++) {
     backPatch(if_end_labels[if_i]);
   }
-  free(if_end_labels);
+  MEM_free(if_end_labels);
 
 }
 
@@ -437,7 +516,7 @@ static void switch_statement(void)
 
     genCodeCalc(LVM_EQUAL);     /* ケース判定 */
     one_case_count++;
-    true_labels    = (int *)realloc(sizeof(int) * one_case_count);
+    true_labels    = (int *)MEM_realloc(sizeof(int) * one_case_count);
     true_labels[0] = genCodeJump(LVM_JUMP_IF_TRUE, 0);
 
     /* expression -> , の並び */
@@ -448,7 +527,7 @@ static void switch_statement(void)
 
       genCodeCalc(LVM_EQUAL);     /* ケース判定 */
       one_case_count++;
-      true_labels = (int *)realloc(sizeof(int) * one_case_count);
+      true_labels = (int *)MEM_realloc(sizeof(int) * one_case_count);
       true_labels[one_case_count-1] = genCodeJump(LVM_JUMP_IF_TRUE, 0);
     }
     token = checkGetToken(token, COLON);
@@ -462,7 +541,7 @@ static void switch_statement(void)
          onecase_i++) {
       backPatch(true_labels[onecase_i]);
     }
-    free(true_labels);
+    MEM_free(true_labels);
 
     /* 処理内容の文リスト */
     while (token.kind != CASE
@@ -474,7 +553,7 @@ static void switch_statement(void)
 
     /* 処理を行った場合の終わりに飛び越す命令 */
     case_count++;
-    endcase_labels               = (int *)realloc(sizeof(int) * case_count);
+    endcase_labels               = (int *)MEM_realloc(sizeof(int) * case_count);
     endcase_labels[case_count-1] = genCodeJump(LVM_JUMP, 0);
 
     /* 次のケースへ飛び越すラベルにバックパッチ */
@@ -501,7 +580,7 @@ static void switch_statement(void)
        case_i++) {
     backPatch(endcase_labels[case_i]);
   }
-  free(endcase_labels);
+  MEM_free(endcase_labels);
 
 }
 
@@ -548,6 +627,10 @@ static void for_statement(void)
 
   /* for文の終わりにバックパッチ */
   backPatch(for_end_label);
+  /* continue文のバックパッチ */
+  backPatchContinueLabels(for_loop_label);
+  /* break文のバックパッチ */
+  backPatchBreakLabels();
 
 }
 
@@ -572,6 +655,10 @@ static void while_statement(void)
 
   /* while文の終わりに飛び越す命令にバックパッチ */
   backPatch(while_end_label);
+  /* continue文のバックパッチ */
+  backPatchContinueLabels(while_loop_label);
+  /* break文のバックパッチ */
+  backPatchBreakLabels();
 }
 
 /* do while文のコンパイル */
@@ -593,6 +680,10 @@ static void do_while_statement(void)
 
   /* ループの先頭に飛び越す命令へバックパッチ */
   genCodeJump(LVM_JUMP_IF_TRUE, do_while_loop_label);
+  /* continue文のバックパッチ */
+  backPatchContinueLabels(do_while_loop_label);
+  /* break文のバックパッチ */
+  backPatchBreakLabels();
 }
 
 /* コンマ式のコンパイル
@@ -616,28 +707,8 @@ static void comma_expression(void)
   }
 }
 
-/* 式のコンパイル */
+/* 論理OR式（式）のコンパイル */
 static void expression(void)
-{
-  /* 演算子の種類 */
-  Token_kind op_kind;
-  /* まず, 論理OR式を読む */
-  logical_or_expression();
-  /* 代入演算子 -> 論理OR式の並び */
-  while (token.kind == ASSIGN
-         || token.kind == ADD_ASSIGN
-         || token.kind == SUB_ASSIGN
-         || token.kind == MUL_ASSIGN
-         || token.kind == DIV_ASSIGN
-         || token.kind == MOD_ASSIGN) {
-    /* TODO:代入をどうやるか */
-    token = nextToken();
-    logical_or_expression();
-  }  
-}
-
-/* 論理OR式のコンパイル */
-static void logical_or_expression(void)
 {
   /* まず, 論理AND式を読む */
   logical_and_expression();
@@ -854,4 +925,3 @@ static void term(void)
       compile_error(SYNTAX_ERROR, line_number);
   }
 }
-{
