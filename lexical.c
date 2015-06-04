@@ -17,7 +17,7 @@ static Keyword_table_entry keyword_table[] = {
   {"int", INT_TYPE}, {"double", DOUBLE_TYPE},
   {"string", STRING_TYPE}, {"bool", BOOLEAN_TYPE},
   {"for", FOR}, {"while", WHILE}, {"do", DO},
-  {"break", BREAK}, {"return", RETURN},
+  {"continue", CONTINUE}, {"break", BREAK}, {"return", RETURN},
   {"if", IF}, {"elsif", ELSIF}, {"else", ELSE},
   {"switch", SWITCH}, {"case", CASE}, {"default", DEFAULT},
   {"null", NULL_LITERAL},

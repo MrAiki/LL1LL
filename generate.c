@@ -54,6 +54,15 @@ int genCodeReturn(void)
   return current_code_size;
 }
 
+/* jump系命令の生成 */
+int genCodeJump(LVM_OpCode opcode, int jump_pc)
+{
+  checkCodeSize();
+  code[current_code_size].opcode    = opcode;
+  code[current_code_size].u.jump_pc = jump_pc;
+  return current_code_size;
+}
+
 /* 現在のコードサイズをチェック.
  * 同時にコードサイズを増加 */
 static void checkCodeSize(void)

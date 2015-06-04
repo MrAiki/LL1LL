@@ -27,7 +27,7 @@ typedef enum token_kind_tag {
   INT_TYPE, DOUBLE_TYPE,                    /* 整数型, 倍精度実数型 */
   STRING_TYPE, BOOLEAN_TYPE,                /* 文字列型, 論理型 */
   FOR, WHILE, DO,                           /* 制御構文 for, while, do */
-  BREAK, RETURN,                            /* 制御構文 break, return  */
+  CONTINUE, BREAK, RETURN,                  /* 制御構文 break, return  */
   IF, ELSIF, ELSE,                          /* 制御構文 if, elsif, else */
   SWITCH, CASE, DEFAULT,                    /* 制御構文 switch, case, default */
   NULL_LITERAL,                             /* NULLリテラル "null" */

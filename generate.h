@@ -39,6 +39,9 @@ typedef enum {
   LVM_DIV,              /* (一つ下)=(一つ下)/(トップ) */
   LVM_MOD,              /* (一つ下)=(一つ下)%(トップ) */
   LVM_POW,              /* (一つ下)=(一つ下)**(トップ) (累乗) */
+  /* 論理演算 */
+  LVM_LOGICAL_AND,
+  LVM_LOGICAL_OR,
   /* 比較 */
   LVM_EQUAL,            /* (一つ下) == (トップ) : トップと一つ下の値が等しいかチェックし, 等しければ, 一つ下にTRUE, 等しくなければFALSEをセット */
   LVM_NOT_EQUAL,        /* (一つ下) != (トップ) */
@@ -63,6 +66,7 @@ typedef struct {
 int genCodeValue(LVM_OpCode opcode, LL1LL_Value);     /* オペランドには値. */
 int genCodeTable(LVM_OpCode opcode, int table_index); /* オペランドには記号表のインデックス */
 int genCodeCalc(LVM_OpCode opcode);                   /* 演算命令の生成 */
+int genCodeJump(LVM_OpCode opcode, int jump_pc);      /* jump系命令の生成 */
 int genCodeReturn(void);                              /* return命令の生成 */
 void backPatch(int program_count);                    /* 引数のプログラムカウンタの命令をバックパッチ. 飛び先はこの関数を呼んだ次の命令. */
 int nextCode(void);                                   /* 次のプログラムカウンタを返す */
