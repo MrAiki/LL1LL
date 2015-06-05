@@ -63,6 +63,15 @@ int genCodeJump(LVM_OpCode opcode, int jump_pc)
   return current_code_size;
 }
 
+/* トップ移動命令の生成 */
+int genCodeJump(LVM_OpCode opcode, int move_top)
+{
+  checkCodeSize();
+  code[current_code_size].opcode     = opcode;
+  code[current_code_size].u.move_top = move_top;
+  return current_code_size;
+}
+
 /* 現在のコードサイズをチェック.
  * 同時にコードサイズを増加 */
 static void checkCodeSize(void)
@@ -94,4 +103,195 @@ void changeJumpPc(int pc, int jump_pc);
 LVM_Instruction *get_instruction(void)
 {
   return &(code[0]);
+}
+
+/* デバッグ用・pc番目の命令の表示 */
+void printCode(int pc)
+{
+  /* ローカルにオペランドの取る種類 */
+  enum {
+    OPRAND_IMMEDIATE,
+    OPRAND_RELADDR,
+    OPRAND_JUMP_PC,
+    OPRAND_MOVE_TOP,
+    OPRAND_VOID,
+  } OprandKind;
+
+  OprandKind oprand_kind;
+
+  /* 命令で場合分けし, オペコード名を印字
+   * オペランドの種類をセット */
+  switch (code[pc].opcode) {
+    case LVM_MOVE_STACK_P:
+      printf("move_stack_pointer");
+      oprand_kind = OPRAND_MOVE_TOP;
+      break;
+    case LVM_PUSH_IMMEDIATE:
+      printf("push_immediate");
+      oprand_kind = OPRAND_IMMEDIATE;
+      break;
+    case LVM_PUSH_VALUE:
+      printf("push_value");
+      oprand_kind = OPRAND_RELADDR;
+      break;
+    case LVM_POP_VARIABLE:
+      printf("pop_variable");
+      oprand_kind = OPRAND_RELADDR;
+      break;
+    case LVM_POP:
+      printf("pop");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_DUPLICATE:
+      printf("duplicate");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_JUMP:
+      printf("jump");
+      oprand_kind = OPRAND_JUMP_PC;
+      break;
+    case LVM_JUMP_IF_TRUE:
+      printf("jump_if_true");
+      oprand_kind = OPRAND_JUMP_PC;
+      break;
+    case LVM_JUMP_IF_FALSE:
+      printf("jump_if_false");
+      oprand_kind = OPRAND_JUMP_PC;
+      break;
+    case LVM_INVOKE:
+      printf("invoke");
+      oprand_kind = OPRAND_RELADDR;
+      break;
+    case LVM_RETURN:
+      printf("return");
+      oprand_kind = OPRAND_RELADDR;
+      break;
+    case LVM_MINUS:
+      printf("minus");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_LOGICAL_NOT:
+      printf("logical_not");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_INCREMENT:
+      printf("increment");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_DECREMENT:
+      printf("decrement");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_ADD:
+      printf("add");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_SUB:
+      printf("sub");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_MUL:
+      printf("mul");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_DIV:
+      printf("div");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_MOD:
+      printf("mod");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_POW:
+      printf("pow");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_LOGICAL_AND:
+      printf("logical_and");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_LOGICAL_OR:
+      printf("logical_or");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_EQUAL:
+      printf("equal");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_NOT_EQUAL:
+      printf("not_equal");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_GREATER:
+      printf("greater");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_GREATER_EQUAL:
+      printf("greater_equal");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_LESSTHAN:
+      printf("lessthan");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_LESSTHAN_EQUAL:
+      printf("lessthan_equal");
+      oprand_kind = OPRAND_VOID;
+      break;
+  }
+
+  /* オペランドの種類に合わせて印字 */
+  switch (oprand_kind) {
+    case OPRAND_IMMEDIATE:
+      /* 即値の場合は, 値を表示する */
+      switch (code.u.value.type) {
+        case LL1LL_INT_TYPE:
+          printf(", %d\n", code[pc].u.value.u.int_value);
+          return;
+        case LL1LL_DOUBLE_TYPE:
+          printf(", %f\n", code[pc].u.value.u.double_value);
+          return;
+        case LL1LL_BOOLEAN_TYPE:
+          if (code[pc].u.value.u.boolean_value == LL1LL_TRUE) {
+            printf(", true\n");
+          } else {
+            printf(", false\n");
+          }
+          return;
+        case LL1LL_OBJECT_TYPE:
+          switch (code.u.value.u.object->type) {
+            case STRING_OBJECT:
+              printf(", \"%s\"", 
+                  code[pc].u.value.u.object->u.str.string_value);
+              return;
+            case ARRAY_OBJECT:
+              return;
+          }
+      }
+    case OPRAND_RELADDR:
+      printf(", level:%d", code[pc].u.address.block_level);
+      printf(", address:%d\n", code[pc].u.address.address);
+      return;
+    case OPRAND_JUMP_PC:
+      printf(", pc:%d\n", code[pc].u.jump_pc);
+      return;
+    case OPRAND_MOVE_TOP:
+      printf(", move_top:%d\n", code[pc].u.move_top);
+      return;
+    case OPRAND_VOID:
+      printf("\n");
+      return;
+  }
+
+}
+
+/* 全命令列の表示 */
+void printCodeList(void)
+{
+  int i;
+  printf("Code List: \n");
+  for (i = 0; i < current_code_size; i++) {
+    printf("%4d: ", i);
+    printCode(i);
+  }
 }
