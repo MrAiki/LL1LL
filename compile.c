@@ -14,13 +14,14 @@ static void varDecl(void);                /* 変数定義のコンパイル */
 static void constDecl(void);              /* 定数定義のコンパイル */
 static void funcDecl(void);               /* 関数定義のコンパイル */
 static void statement(void);              /* 文のコンパイル */
-static void assign_statement(void);        /* 代入文のコンパイル */
+static void assign_statement(void);       /* 代入文のコンパイル */
 static void if_statement(void);           /* if文のコンパイル */
 static void switch_statement(void);       /* switch文のコンパイル */
 static void for_statement(void);          /* for文のコンパイル */
 static void while_statement(void);        /* while文のコンパイル */
 static void do_while_statement(void);     /* do while文のコンパイル */
 static void block(void);                  /* ブロックのコンパイル */
+static void function_block(void);         /* 関数ブロックのコンパイル */
 static void comma_expression(void);       /* コンマ式のコンパイル */
 static void expression(void);             /* 式のコンパイル */
 // static void logical_or_expression(void);  /* 論理OR式のコンパイル */
@@ -211,10 +212,14 @@ static void constDecl(void)
 /* 関数定義のコンパイル */
 static void funcDecl(void)
 {
-  /* TODO:関数の情報をバッファにとっておいて, コンパイル後に登録 */
 
+  int table_index;
   /* IDENTIFIERを確認 */
   token = checkGetToken(token, IDENTIFIER);
+
+  /* 名前表に関数名を登録 */
+  table_index = addTableFunc(token.u.identifier, nextCode()); /* 先頭番地は, まず, 次のpcからとなる(再帰対応) */
+  blockBegin(FIRST_LOCAL_ADDRESS);  /* ブロック開始. 仮引数のレベルは, 関数ブロック内と同じにする */
 
   if (token.kind == LEFT_PARLEN) {
     /* 仮引数リストが始まっていた場合 */
@@ -222,25 +227,79 @@ static void funcDecl(void)
 
     /* 仮引数の並びparam1, param2, ...のコンパイル */
     while (1) {
-      /* IDENTIFIERを取得 */
-      token = checkGetToken(token, IDENTIFIER);
+      /* 仮引数の識別子を確認 */
+      if (token.kind == IDENTIFIER) {
+        /* 仮引数を名前表に登録 */
+        addTableParam(token.u.identifier);
+        token = nextToken();
+      }
+
+      /* 仮引数の区切りのコンマ */
       if (token.kind == COMMA) {
         /* コンマが来たら仮引数の並びが続く */
         token = nextToken();
         continue;
       } else {
+        /* コンマが来なかったら仮引数リスト終了と判定 */
         break;
       }
+
     }
+
     /* 仮引数リストの閉じ ) を確認する */
     token = checkGetToken(token, RIGHT_PARLEN);
+    /* 仮引数の終わり. 仮引数にアドレスを割り当てる */
+    parEnd();
+
   } else {
-    /* 仮引数リストを省略した場合(仮引数無しの関数と等価) */
+    /* 仮引数リストを省略した場合(仮引数無しの関数と等価)
+     * => parEnd()は不要. */
+
   }
 
   /* 関数の処理内容のコンパイル */
   token = checkGetToken2(token, LEFT_BRACE, LEFT_BRACE_STRING);
-  block();
+  function_block(table_index);
+  /* ブロックの終了 */
+  blockEnd();
+}
+
+/* 関数ブロックのコンパイル */
+static void function_block(int function_index)
+{
+
+  /* まず, 関数の飛び先アドレスを次の命令にセットし,
+   * スタック必要量だけスタックトップを移動する */
+  changeFuncAddr(function_index, nextCode());
+  genCode(LVM_MOVE_STACK_P, getBlockNeedMemory());
+
+  while (1) {
+    if (token.kind == RIGHT_BRACE
+        || token.kind == RIGHT_BRACE_STRING) {
+      /* ブロック終了記号を見たら終了 */
+      token = nextToken();
+      break;
+    }
+    /* 変数定義, 定義定義, 文の並び */
+    switch (token.kind) {
+      case VAR:
+        token = nextToken();
+        varDecl();
+        continue;
+      case CONST:
+        token = nextToken();
+        constDecl();
+        continue;
+      default:
+        statement();
+        continue;
+    } 
+  }
+
+  /* 強制的に戻るreturn命令を生成
+   * TODO:どこからでもreturnできるように */
+  genCodeReturn();
+
 }
 
 /* ブロックのコンパイル */
@@ -314,6 +373,13 @@ static void statement(void)
       break;
     case CONTINUE:
       /* continue文のコンパイル */
+
+      /* 現在コンパイル中のブロックがループブロック
+       * ではない時はエラー */
+      if (getBlockKind() != LOOP_BLOCK) {
+        fprintf(stderr, "Error! This block isn't loop block, so cannot use continue. \n");
+        exit(1);
+      }
       tmp_label = genCodeJump(LVM_JUMP, 0);
       addContinueLabel(tmp_label);
       token = nextToken();
@@ -325,6 +391,13 @@ static void statement(void)
       break;
     case BREAK:
       /* break文のコンパイル */
+
+      /* 現在コンパイル中のブロックがループブロック
+       * ではない時はエラー */
+      if (getBlockKind() != LOOP_BLOCK) {
+        fprintf(stderr, "Error! This block isn't loop block, so cannot use break. \n");
+        exit(1);
+      }
       tmp_label = genCodeJump(LVM_JUMP, 0);
       addBreakLabel(tmp_label);
       token = nextToken();
@@ -336,13 +409,22 @@ static void statement(void)
       break;
     case RETURN:
       /* return文のコンパイル */
-      token = nextToken();
+      /* 現在コンパイル中のブロックが関数ブロック
+       * ではない時はエラー */
+      if (getBlockKind() != FUNCTION_BLOCK) {
+        fprintf(stderr, "Error! This block isn't functon block, so cannot use return \n");
+        exit(1);
+      }
+
       /* expression -> (;)の並び */
-      expression();
+      token = nextToken();
+      expression();         /* 返り値 */
+      genCodeReturn();      /* return命令の生成 */
       /* ';'は省略可能に */
       if (token.kind == SEMICOLON) {
         token = nextToken();
       }
+
       /* token = checkGetToken(token, SEMICOLON); */
       break;
     case LEFT_BRACE:        /* FALLTHRU */
@@ -415,6 +497,11 @@ static void assign_statement(int table_index)
     
     /* 代入 */
     genCodeTable(LVM_POP_VARIABLE, table_index);
+
+    /* 省略可能なセミコロン */
+    if (token.kind == SEMICOLON) {
+      token = nextToken();
+    }
 
   } else {
     /* 代入文ではなかった => 式のコンパイルへ移行 */
