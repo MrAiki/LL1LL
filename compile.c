@@ -3,6 +3,10 @@
 #define FIRST_LOCAL_ADDRESS (2) /* 各ブロックの最初のローカル変数のアドレス:0にはディスプレイが指すアドレス, 1には戻りアドレスが入る */
 
 static Token token;               /* 次のトークン */
+static int *increment_table_list; /* インクリメントする変数のテーブルインデックス・リスト */
+static int increment_table_count; /* インクリメントする変数のテーブルリストの長さ. 式の中にあるインクリメントの数と同一 */
+static int *decrement_table_list; /* デクリメントする変数のテーブルインデックス・リスト */
+static int decrement_table_count; /* デクリメントする変数のテーブルリストの長さ. 式の中にあるインクリメントの数と同一 */
 
 /* コンパイル・モジュール群 */
 static void toplevel(void);               /* トップレベルのコンパイル */
@@ -709,6 +713,11 @@ static void comma_expression(void)
 /* 論理OR式（式）のコンパイル */
 static void expression(void)
 {
+  /* インクリメント・デクリメントカウントのリセット */
+  increment_table_count = 0;
+  decrement_table_count = 0;
+  int inc_dec_i;
+
   /* まず, 論理AND式を読む */
   logical_and_expression();
   /* 論理OR -> 論理AND式の並び */
@@ -718,6 +727,30 @@ static void expression(void)
     logical_and_expression();
     genCodeCalc(LVM_LOGICAL_OR);
   }
+
+  /* インクリメント・デクリメントの実行 */
+  for (inc_dec_i = 0;
+       inc_dec_i < increment_table_count;
+       inc_dec_i++) {
+    /* 変数を一旦プッシュし, 1増やして, 再びポップする */
+    genCodeTable(LVM_PUSH_VALUE, increment_table_list[inc_dec_i]);
+    genCodeCalc(LVM_INCREMENT);
+    genCodeTable(LVM_POP_VARIABLE, increment_table_list[inc_dec_i]);
+  }
+  /* リストの解放 */
+  MEM_free(increment_table_count);
+
+  for (inc_dec_i = 0;
+       inc_dec_i < decrement_table_count;
+       inc_dec_i++) {
+    /* 変数を一旦プッシュし, 1増やして, 再びポップする */
+    genCodeTable(LVM_PUSH_VALUE, decrement_table_list[inc_dec_i]);
+    genCodeCalc(LVM_DECREMENT);
+    genCodeTable(LVM_POP_VARIABLE, decrement_table_list[inc_dec_i]);
+  }
+  /* リストの解放 */
+  MEM_free(decrement_table_count);
+
 }
 
 /* 論理AND式のコンパイル */
@@ -872,7 +905,7 @@ static void power_expression(void)
 static void unary_expression(void)
 {
   /* 項の前の演算子と, 後の演算子を保持する */
-  Token_kind prefix_op = OTHERS, suffix_op = OTHERS;
+  Token_kind prefix_op = OTHERS;
 
   /* 項の前に付く演算子（無くても可） !,not,+,- */
   if (token.kind == LOGICAL_NOT
@@ -886,16 +919,8 @@ static void unary_expression(void)
   /* 項のコンパイル */
   term();
 
-  /* 項の後に付く演算子（無くても可） ++,-- */
-  if (token.kind == INCREMENT
-      || token.kind == DECREMENT) {
-    suffix_op = token.kind;
-    token     = nextToken();
-  }
-
-  /* TODO:項の前に付く演算子のコード生成
-   * => termの側で, 識別子がわからないと代入できないし,
-   * 増加させるタイミングを式の評価後にさせるのをどうやる? */
+  /* 項の後に付く演算子（無くても可） ++,-- 
+   * => termに移動 */
 
   /* 項の前に付く演算子のコード生成 */
   switch (prefix_op) {
@@ -919,14 +944,91 @@ static void unary_expression(void)
 /* 項のコンパイル */
 static void term(void)
 {
-  LL1LL_Value temp_value;
+  /* コンパイル用のテンポラリ */
+  int table_index;        /* テーブルインデックス */
+  IdentifierKind id_kind; /* 識別子の種類 */
+  LL1LL_Value temp_value; /* プッシュ用の変数 */
+  int param_count;        /* パラメタのインデックス */
+
   /* トークンの種類で場合分け */
   switch (token.kind) {
     /* 変数/定数参照, 関数呼び出し, 配列参照
      * -> 記号表から判断して構文解析 */
     case IDENTIFIER:
-      /* TODO */
-      token = nextToken();
+      /* 記号表から探索 */
+      table_index = searchTable(token.u.identifier, VAR_IDENTIFIER);
+      /* 識別子の種類 */
+      id_kind     = getTableKind(table_index);
+
+      /* 識別子の種類で場合分け, プッシュ/関数呼び出し */
+      switch (id_kind) {
+        case VAR_IDENTIFIER:    /* FALLTHRU */
+        case PARAM_IDENTIFIER:
+          token = nextToken();
+          /* テーブルからプッシュ */
+          genCodeTable(LVM_PUSH_VALUE, table_index);
+
+          /* 変数の場合, インクリメント/デクリメントを見たら
+           * インクリメント・デクリメントリストに登録 */
+          switch (token.kind) {
+            case INCREMENT:
+              token = nextToken();
+              increment_table_count++;
+              increment_table_list = (int *)MEM_realloc(increment_table_list, sizeof(int) * increment_table_count);
+              increment_table_list[increment_table_count-1] = table_index; /* 今見つけたテーブルインデックス */
+              break;
+            case DECREMENT:
+              token = nextToken();
+              decrement_table_count++;
+              decrement_table_list = (int *)MEM_realloc(decrement_table_list, sizeof(int) * decrement_table_count);
+              decrement_table_list[decrement_table_count-1] = table_index; /* 今見つけたテーブルインデックス */
+              break;
+          }
+          break;
+        case CONST_IDENTIFIER:
+          /* 定数値のプッシュ */
+          genCodeValue(LVM_PUSH_IMMEDIATE, 
+                       getConstValue(table_index));
+          token = nextToken();
+          break;
+        case FUNC_IDENTIFIER:
+          token = nextToken();
+
+          /* パラメタ処理 */
+          param_count = 0;
+          if (token.kind == LEFT_PARLEN) {
+            token = nextToken();
+            if (token.kind != RIGHT_PARLEN) {
+              /* funcid(param_1, param_2, ..., param_n)
+               * パラメタ付きの呼び出し */
+              while (1) {
+                expression();   /* 仮引数をプッシュ */
+                param_count++;
+                if (token.kind == COMMA) {
+                  token = nextToken();
+                  continue;
+                }
+                /* 最後は)で終わらないといけない */
+                token = checkGetToken(token, RIGHT_PARLEN);
+                break;
+              }
+            } else {
+              /* funcid()の形の呼び出し */
+              token = nextToken();
+            }
+          }
+
+          /* パラメタ数の一致を確認 */
+          if (getNumParams(table_index) != param_count) {
+            fprintf(stderr, "Error! Function parameters unmatch \n");
+            exit(1);
+          }
+
+          /* 関数呼び出しのコード生成
+           * funcid のように, ()を省略した呼び出しも可能 */
+          genCodeTable(LVM_INVOKE, table_index);
+          break;
+      }
       break;
       /* リテラル : その場でコード生成 */
     case INT_LITERAL:
@@ -936,8 +1038,8 @@ static void term(void)
       token = nextToken();
       break;
     case DOUBLE_LITERAL:
-      temp_value.type        = LL1LL_DOUBLE_TYPE;
-      temp_value.u.int_value = token.u.double_value;
+      temp_value.type           = LL1LL_DOUBLE_TYPE;
+      temp_value.u.double_value = token.u.double_value;
       genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
       token = nextToken();
       break;
@@ -950,11 +1052,13 @@ static void term(void)
     case TRUE_LITERAL:
       temp_value.type            = LL1LL_BOOLEAN_TYPE;
       temp_value.u.boolean_value = LL1LL_TRUE;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
       token = nextToken();
       break;
     case FALSE_LITERAL:
       temp_value.type            = LL1LL_BOOLEAN_TYPE;
       temp_value.u.boolean_value = LL1LL_FALSE;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
       token = nextToken();
       break;
       /* (comma_expression) のコンパイル */
