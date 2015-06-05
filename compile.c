@@ -98,7 +98,6 @@ static void varDecl(void)
           break;
         case STRING_LITERAL:    /* 文字列リテラル */
           value_temp.type           = LL1LL_OBJECT_TYPE;
-          value_temp.u.object->type = STRING_OBJECT;
           value_temp.u.object       = alloc_string(token.u.string_value, LL1LL_TRUE);
           break;
         case TRUE_LITERAL:      /* 論理値リテラル */
@@ -872,12 +871,16 @@ static void power_expression(void)
 /* 単項式のコンパイル */
 static void unary_expression(void)
 {
+  /* 項の前の演算子と, 後の演算子を保持する */
+  Token_kind prefix_op = OTHERS, suffix_op = OTHERS;
+
   /* 項の前に付く演算子（無くても可） !,not,+,- */
   if (token.kind == LOGICAL_NOT
       || token.kind == LOGICAL_NOT_STRING
       || token.kind == PLUS
       || token.kind == MINUS) {
-    token = nextToken();
+    prefix_op = token.kind;
+    token     = nextToken();
   }
 
   /* 項のコンパイル */
@@ -886,7 +889,29 @@ static void unary_expression(void)
   /* 項の後に付く演算子（無くても可） ++,-- */
   if (token.kind == INCREMENT
       || token.kind == DECREMENT) {
-    token = nextToken();
+    suffix_op = token.kind;
+    token     = nextToken();
+  }
+
+  /* TODO:項の前に付く演算子のコード生成
+   * => termの側で, 識別子がわからないと代入できないし,
+   * 増加させるタイミングを式の評価後にさせるのをどうやる? */
+
+  /* 項の前に付く演算子のコード生成 */
+  switch (prefix_op) {
+    case OTHERS:  /* FALLTHRU */
+    case PLUS:
+      /* 項の前に付いた+は何もしない */
+      break;
+    case MINUS:
+      /* 符号反転 */
+      genCodeCalc(LVM_MINUS);
+      break;
+    case LOGICAL_NOT:         /* FALLTHRU */
+    case LOGICAL_NOT_STRING:
+      /* 論理値反転 */
+      genCodeCalc(LVM_LOGICAL_NOT);
+      break;
   }
 
 }
@@ -894,19 +919,42 @@ static void unary_expression(void)
 /* 項のコンパイル */
 static void term(void)
 {
+  LL1LL_Value temp_value;
   /* トークンの種類で場合分け */
   switch (token.kind) {
     /* 変数/定数参照, 関数呼び出し, 配列参照
      * -> 記号表から判断して構文解析 */
     case IDENTIFIER:
+      /* TODO */
       token = nextToken();
       break;
-      /* リテラル : その場でコード生成？ */
-    case INT_LITERAL:     /* FALLTHRU */
-    case DOUBLE_LITERAL:  /* FALLTHRU */
-    case STRING_LITERAL:  /* FALLTHRU */
-    case TRUE_LITERAL:    /* FALLTHRU */
+      /* リテラル : その場でコード生成 */
+    case INT_LITERAL:
+      temp_value.type        = LL1LL_INT_TYPE;
+      temp_value.u.int_value = token.u.int_value;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
+      break;
+    case DOUBLE_LITERAL:
+      temp_value.type        = LL1LL_DOUBLE_TYPE;
+      temp_value.u.int_value = token.u.double_value;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
+      break;
+    case STRING_LITERAL:
+      temp_value.type     = LL1LL_OBJECT_TYPE;
+      temp_value.u.object = alloc_string(token.u.string_value, LL1LL_TRUE);
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
+      break;
+    case TRUE_LITERAL:
+      temp_value.type            = LL1LL_BOOLEAN_TYPE;
+      temp_value.u.boolean_value = LL1LL_TRUE;
+      token = nextToken();
+      break;
     case FALSE_LITERAL:
+      temp_value.type            = LL1LL_BOOLEAN_TYPE;
+      temp_value.u.boolean_value = LL1LL_FALSE;
       token = nextToken();
       break;
       /* (comma_expression) のコンパイル */
