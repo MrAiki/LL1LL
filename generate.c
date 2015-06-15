@@ -42,13 +42,13 @@ int genCodeReturn(void)
 {
   /* 直前の命令がreturnならば, 連続returnになるので
    * すぐに終わる */
-  if (code[current_code_size].opcode == RETURN) 
+  if (code[current_code_size].opcode == LVM_RETURN) 
     return current_code_size;
 
   /* コードサイズを確認してから命令生成 */
   /* オペランドのブロックレベルやパラメタ数は, table.hからの情報を使う */
   checkCodeSize();
-  code[current_code_size].opcode = RETURN;
+  code[current_code_size].opcode = LVM_RETURN;
   code[current_code_size].u.address.block_level = getBlockLevel();
   code[current_code_size].u.address.address     = getCurrentNumParams();
   return current_code_size;
@@ -64,7 +64,7 @@ int genCodeJump(LVM_OpCode opcode, int jump_pc)
 }
 
 /* トップ移動命令の生成 */
-int genCodeJump(LVM_OpCode opcode, int move_top)
+int genCodeMove(LVM_OpCode opcode, int move_top)
 {
   checkCodeSize();
   code[current_code_size].opcode     = opcode;
@@ -81,7 +81,7 @@ static void checkCodeSize(void)
     return;
   } else {
     /* TODO:可変にして, メモリの限界まで使えるように */
-    fprintf(stderr, "Too many codes... TODO:Code size should be able to expand \n");
+    fprintf(stderr, "Too many codes... : %d TODO:Code size should be able to expand \n", current_code_size);
     exit(1);
   }
 }
@@ -94,7 +94,7 @@ void backPatch(int program_count)
 }
 
 /* pcのジャンプ命令の飛び先をjump_pcに変更する */
-void changeJumpPc(int pc, int jump_pc);
+void changeJumpPc(int pc, int jump_pc)
 {
   code[pc].u.jump_pc = jump_pc;
 }
@@ -109,7 +109,7 @@ LVM_Instruction *get_instruction(void)
 void printCode(int pc)
 {
   /* ローカルにオペランドの取る種類 */
-  enum {
+  typedef enum {
     OPRAND_IMMEDIATE,
     OPRAND_RELADDR,
     OPRAND_JUMP_PC,
@@ -122,6 +122,10 @@ void printCode(int pc)
   /* 命令で場合分けし, オペコード名を印字
    * オペランドの種類をセット */
   switch (code[pc].opcode) {
+    case LVM_NOP:
+      printf("nop");
+      oprand_kind = OPRAND_VOID;
+      break;
     case LVM_MOVE_STACK_P:
       printf("move_stack_pointer");
       oprand_kind = OPRAND_MOVE_TOP;
@@ -238,47 +242,56 @@ void printCode(int pc)
       printf("lessthan_equal");
       oprand_kind = OPRAND_VOID;
       break;
+    default:
+      fprintf(stderr, "Error! mismatch opcode name in print_code\n");
+      exit(1);
+      break;
   }
 
   /* オペランドの種類に合わせて印字 */
   switch (oprand_kind) {
     case OPRAND_IMMEDIATE:
       /* 即値の場合は, 値を表示する */
-      switch (code.u.value.type) {
+      switch (code[pc].u.value.type) {
         case LL1LL_INT_TYPE:
-          printf(", %d\n", code[pc].u.value.u.int_value);
+          printf(", int:%d\n", code[pc].u.value.u.int_value);
           return;
         case LL1LL_DOUBLE_TYPE:
-          printf(", %f\n", code[pc].u.value.u.double_value);
+          printf(", double:%f\n", code[pc].u.value.u.double_value);
           return;
         case LL1LL_BOOLEAN_TYPE:
           if (code[pc].u.value.u.boolean_value == LL1LL_TRUE) {
-            printf(", true\n");
+            printf(", boolean:true\n");
           } else {
-            printf(", false\n");
+            printf(", boolean:false\n");
           }
           return;
         case LL1LL_OBJECT_TYPE:
-          switch (code.u.value.u.object->type) {
+          switch (code[pc].u.value.u.object->type) {
             case STRING_OBJECT:
-              printf(", \"%s\"", 
+              printf(", string:\"%s\"\n", 
                   code[pc].u.value.u.object->u.str.string_value);
               return;
             case ARRAY_OBJECT:
+              /* 配列:これから... */
               return;
           }
+        case LL1LL_NULL_TYPE:
+          printf(", null\n");
+          return;
       }
     case OPRAND_RELADDR:
       printf(", level:%d", code[pc].u.address.block_level);
       printf(", address:%d\n", code[pc].u.address.address);
       return;
     case OPRAND_JUMP_PC:
-      printf(", pc:%d\n", code[pc].u.jump_pc);
+      printf(", jump_pc:%d\n", code[pc].u.jump_pc);
       return;
     case OPRAND_MOVE_TOP:
       printf(", move_top:%d\n", code[pc].u.move_top);
       return;
-    case OPRAND_VOID:
+    case OPRAND_VOID: /* FALLTHRU */
+    default:
       printf("\n");
       return;
   }
@@ -290,7 +303,7 @@ void printCodeList(void)
 {
   int i;
   printf("Code List: \n");
-  for (i = 0; i < current_code_size; i++) {
+  for (i = 0; i <= current_code_size; i++) {
     printf("%4d: ", i);
     printCode(i);
   }

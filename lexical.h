@@ -9,15 +9,6 @@
 #include "share.h"
 #include "error.h"
 
-/* 一回のfgetsで取得する最大文字数 */
-#define MAX_LEN_SOURCE_LINE    (200)
-/* 識別子の最大長 */
-#define MAX_LEN_IDENTIFIER     (30) 
-/* 数字リテラルの最大桁数 */
-#define MAX_LEN_NUMBER_LITERAL (30)
-/* 文字列リテラルの最大文字数 */
-#define MAX_LEN_STRING_LITERAL (50)
-
 /* 入力ストリームの実体 */
 FILE* input_source;
 
@@ -61,6 +52,7 @@ typedef enum token_kind_tag {
   DIGIT,                                    /* [0-9] 数字 */
   OTHERS,                                   /* それ以外の文字 */
   END_OF_CHAR_KIND,                         /* ここまで文字種類 */
+  END_OF_FILE,                              /* ファイル終わり */
 } Token_kind;
 
 /* トークン */
@@ -82,7 +74,9 @@ int openSource(char *filename); /* ソースファイルのオープン */
 void closeSource(void);         /* ソースファイルのクローズ */
 void initSource(void);          /* 読み込み準備 */
 Token nextToken(void);          /* 次のトークンを読む */
+Token prevToken(void);          /* 1つ前のトークンを返す */
 Token checkGetToken(Token token, Token_kind kind);  /* 引数のトークンが第二引数のトークンの種類と一致するか確認し, 次のトークンを返す */
 Token checkGetToken2(Token token, Token_kind kind1, Token_kind kind2);  /* 引数のトークンが第二引数, または第三引数のトークンの種類と一致するか確認し, 次のトークンを返す */
+void printToken(Token token);   /* トークンの印字 */
 
 #endif /* LEXICAL_H_INCLUDED */

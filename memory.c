@@ -22,6 +22,7 @@ static struct MEM_Controller_tag st_default_controller = {
   default_error_handler, /* 定義は下に. 簡単なエラー文を出す */
   MEM_FAIL_AND_EXIT      /* 割り当て失敗時は, 終了する */ 
 };
+
 /* ハンドラにセット */
 MEM_Controller mem_default_controller = &st_default_controller;
 

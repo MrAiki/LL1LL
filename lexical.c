@@ -5,6 +5,9 @@ static int line_index;  /* 現在行の文字インデックス */
 int line_number;        /* 現在の行数 */
 static char nextchar;   /* 次の文字が入っているバッファ */
 
+static Token prev_token;    /* 一つ前のトークン */
+static Token current_token; /* 今読んでいるトークン */
+
 /* 予約語文字列と予約語種類の対応テーブルのエントリ */
 typedef struct keyword_table_entry_tag {
   char *keyword_string; /* 文字列 */
@@ -38,10 +41,9 @@ static Keyword_table_entry keyword_table[] = {
   {"==", EQUAL}, {"!=", NOT_EQUAL},
   {">", GREATER}, {">=", GREATER_EQUAL},
   {"<", LESSTHAN}, {"<=", LESSTHAN_EQUAL},
-  {"+", PLUS}, {"-", MINUS}, {"*", MUL}, {"/", DIV}, {"%", MOD},
+  {"+", PLUS}, {"-", MINUS}, {"*", MUL}, {"/", DIV}, {"%", MOD}, {"!", LOGICAL_NOT},
   {"**", POWER},
   {"++", INCREMENT}, {"--", DECREMENT},
-  {"!", LOGICAL_NOT},
   {"\"", DOUBLE_QUOTE},
   {"$dummy_end_of_keysymbol", END_OF_KEYSYMBOL},
 };
@@ -50,6 +52,9 @@ static Keyword_table_entry keyword_table[] = {
  * ex) char_kind['a'] == LETTER 
  * 関数でも同じことはできるが, 配列形式の方が早い */
 static Token_kind char_kind[256]; /* ascii文字列は8bit256文字 */
+
+/* 次のトークンを返す */
+static Token st_nextToken(void);
 
 /* ソースファイルのオープン 
  * オープンに成功すれば0を, 失敗すれば1を返す */
@@ -117,7 +122,7 @@ static char nextChar(void)
       line_index = 0; /* インデックスは0に */
     } else {
       fprintf(stderr, "End of source file\n");
-      exit(0);
+      return EOF;
     }
   }
 
@@ -134,7 +139,7 @@ static char nextChar(void)
 }
 
 /* 次のトークンを返す. 字句解析の全て */
-Token nextToken(void)
+static Token st_nextToken(void)
 {
   int token_string_index = 0; /* トークン文字のインデックス */
   int table_index;  /* 予約語テーブルのインデックス */
@@ -158,8 +163,14 @@ Token nextToken(void)
     }
   }
 
+  /* ファイルの末端に達していたら終わり */
+  if (feof(input_source)) {
+    temp_token.kind = END_OF_FILE;
+    return temp_token;
+  }
+
   /* 読み込んだ文字の種類で場合分け, トークンに値を詰める */
-  tmp_char_kind = char_kind[nextchar];
+  tmp_char_kind = char_kind[(int)nextchar];
   switch (tmp_char_kind) {
     case LETTER:  /* 文字 */
       /* 文字列の読み取り : 数字, 文字以外の文字が出るまで読む */
@@ -168,8 +179,8 @@ Token nextToken(void)
           identifier_buf[token_string_index++] = nextchar;
           nextchar = nextChar();
         }
-      } while(char_kind[nextchar] == LETTER 
-          || char_kind[nextchar] == DIGIT);
+      } while(char_kind[(int)nextchar] == LETTER 
+          || char_kind[(int)nextchar] == DIGIT);
 
       /* 識別子の最大長を超えている
        * -> 警告を出し, 長さをMAX_LEN_IDENTIFIERに切り詰める */
@@ -228,7 +239,7 @@ Token nextToken(void)
             nextchar = nextChar();
           }
         }
-      } while(char_kind[nextchar] == DIGIT);
+      } while(char_kind[(int)nextchar] == DIGIT);
 
       /* 得られた文字列の末尾にナル文字をセット */
       number_buf[token_string_index] = '\0';
@@ -307,7 +318,7 @@ Token nextToken(void)
           nextchar = nextChar();
           temp_token.kind = DIV_ASSIGN;
           break;
-        case '*' : /* "/*" : Cスタイルコメント */
+        case '*' : /* Cスタイルコメント */
           nextchar = nextChar();
           do {
             while (nextchar != '*') {
@@ -465,6 +476,21 @@ Token nextToken(void)
   return temp_token;
 }
 
+/* 次のトークンを読む */
+Token nextToken(void)
+{
+  /* 前のトークンを保存し, 今読んでいるトークンを更新する */
+  prev_token = current_token;
+  current_token = st_nextToken();
+  return current_token;
+}
+
+/* 1つ前のトークンを返す. ホントは反則技. */
+Token prevToken(void)
+{
+  return prev_token;
+}
+
 /* 第一引数のトークンが, 第二引数の種類に合致するか,
  * つまりtoken.kind == kindをチェックして
  * 次のトークンを返す.
@@ -484,6 +510,9 @@ Token checkGetToken(Token token, Token_kind kind)
     /* シンタックスエラー */
     compile_error(SYNTAX_ERROR, line_number);
   }
+
+  /* unreachable here */
+  exit(1);
 }
 
 /* checkGetTokenの, 2種類対応版.
@@ -503,6 +532,9 @@ Token checkGetToken2(Token token, Token_kind kind1, Token_kind kind2)
     /* シンタックスエラー */
     compile_error(SYNTAX_ERROR, line_number);
   }
+
+  /* unreachable here */
+  exit(1);
 }
 
     
@@ -518,6 +550,7 @@ void initSource(void)
 }
 
 
+/* デバッグ用トークンの印字 */
 void printToken(Token token)
 {
   if (token.kind < END_OF_KEYSYMBOL) {

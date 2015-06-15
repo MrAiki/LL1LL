@@ -9,11 +9,12 @@
 #include "table.h"
 
 /* FIXME:長さは可変にしよう */
-#define MAX_CODE_SIZE (1000) /* コードの最大長 */
+#define MAX_CODE_SIZE (2000) /* コードの最大長 */
 
 /* 命令語の種類 */
 typedef enum {
   /* スタック操作系 */
+  LVM_NOP,               /* 何もしない */
   LVM_MOVE_STACK_P,      /* スタックポインタの値をオペランド分だけ動かす */
   /* プッシュ・ポップ */
   LVM_PUSH_IMMEDIATE,   /* オペランドの値をスタックにプッシュ */

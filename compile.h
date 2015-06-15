@@ -10,6 +10,7 @@
 #include "error.h"
 #include "table.h"
 #include "generate.h"
+#include "MEM.h"
 
 extern int line_number; /* 現在コンパイル中の行数 */
 

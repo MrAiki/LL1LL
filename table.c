@@ -19,9 +19,14 @@ static NameTableEntry name_table[MAX_TABLE_SIZE]; /* 名前表 FIXME:ポイン�
 static int table_index = 0;   /* 現在参照している名前表のインデックス */
 static int table_func_index;  /* 現在参照している関数の名前表のインデックス */
 static int current_block_level = -1;  /* 現在のブロックレベル */
+
+/* TODO:ブロックの情報を構造体にまとめる */
 static int last_index[MAX_BLOCK_LEVEL]; /* i番目の要素は, ブロックレベルiの最後の名前表のインデックス */
 static int last_addr[MAX_BLOCK_LEVEL];  /* i番目の要素は, ブロックレベルiの最後の変数のアドレス */
+static int block_kind[MAX_BLOCK_LEVEL]; /* i番目の要素は, ブロックレベルiの種類 */
 static int local_addr;        /* 現在のブロックの最後の変数番地 */
+static int break_label_count[MAX_BLOCK_LEVEL];    /* 各ブロックのbreakラベルの個数 */
+static int continue_label_count[MAX_BLOCK_LEVEL]; /* 各ブロックのcontinueラベルの個数 */
 
 /* 名前表エントリ数を増やし, 名前を登録 */
 void addTableName(char *identifier)
@@ -40,7 +45,7 @@ void addTableName(char *identifier)
 /* 名前表に関数を登録 */
 int addTableFunc(char *identifier, int address)
 {
-  addTableFunc(identifier); /* 名前を登録 */
+  addTableName(identifier); /* 名前を登録 */
   name_table[table_index].kind                        = FUNC_IDENTIFIER;  /* 識別子の種類 */
   name_table[table_index].u.f.rel_address.block_level = current_block_level;  /* ブロックレベル */
   name_table[table_index].u.f.rel_address.address     = address;      /* 先頭番地をセット */
@@ -65,8 +70,8 @@ int addTableVar(char *identifier)
 {
   addTableName(identifier);
   name_table[table_index].kind = VAR_IDENTIFIER;
-  name_table[table_index].u.rel_address.level   = current_block_level;  /* 現在のブロックレベル */
-  name_table[table_index].u.rel_address.address = local_addr++; /* ローカル変数のアドレスを更新しつつ登録 */
+  name_table[table_index].u.rel_address.block_level = current_block_level;  /* 現在のブロックレベル */
+  name_table[table_index].u.rel_address.address     = local_addr++; /* ローカル変数のアドレスを更新しつつ登録 */
   return table_index;
 }
 
@@ -103,7 +108,7 @@ void changeFuncAddr(int table_index, int new_address)
 }
 
 /* 名前表から, 名前identifier, 種類kindのエントリを探し, あればそのインデックスを返す. なければ0を返すが, 変数を探索していた場合は, 変数を新規登録する */
-searchTable(char *identifier, IdentifierKind kind)
+int searchTable(char *identifier, IdentifierKind kind)
 {
 
   /* スタック型領域のため, 探索は末尾から始める */
@@ -157,32 +162,43 @@ int getNumParams(int index)
 
 /* ブロック開始で呼ばれる.
  * スタック型記憶領域の更新, ブロックレベル更新 */
-void blockBegin(int first_address)
+void blockBegin(int first_address, BlockKind kind)
 {
+  int i;
   /* トップレベルの際は, 初期設定を行う */
-  if (block_level == -1) {
-    local_addr  = first_address; /* (0が入る) */
-    table_index = 0;             /* 名前表インデックスの初期化 */
-    block_level++;               /* ブロックレベルを0に */
+  if (current_block_level == -1) {
+    local_addr    = first_address; /* (FIRST_LOCAL_ADDRESSが入る) */
+    table_index   = 0;             /* 名前表インデックスの初期化 */
+    block_kind[0] = TOPLEVEL;      /* ブロックの種類をトップレベルに */
+    /* ラベルの個数を全てリセット */
+    for (i = 0; i < MAX_BLOCK_LEVEL; i++) {
+      break_label_count[i] = 0;
+      continue_label_count[i] = 0;
+    }
+    current_block_level++;                 /* ブロックレベルを0に */
     return;
   }
 
   /* ブロックを深くネストしすぎた場合は, エラー終了
    * FIXME:ブロックネストも可変であるべき.
    * <=> last_index, last_addrを可変に */
-  if (block_level == MAX_BLOCK_LEVEL-1) {
+  if (current_block_level == MAX_BLOCK_LEVEL-1) {
     fprintf(stderr, "Too many nested blocks. \n");
     exit(1);
   }
 
   /* 現在のブロックの情報を保存 */
-  last_index[block_level] = table_index;  /* 名前表インデックス */
-  last_addr[block_level]  = local_addr;   /* ローカル変数のインデックス */
+  last_index[current_block_level] = table_index;  /* 名前表インデックス */
+  last_addr[current_block_level]  = local_addr;   /* ローカル変数のインデックス */
+  block_kind[current_block_level] = kind;         /* 現在のブロックの種類 */
+  /* ラベルの個数を初期化 */
+  break_label_count[current_block_level]    = 0;
+  continue_label_count[current_block_level] = 0;
 
   /* 新しいブロックの最初の変数のアドレスに書き換え */
   local_addr              = first_address;
   /* ブロックレベルの更新 */
-  block_level++;
+  current_block_level++;
 
 }
 
@@ -190,18 +206,49 @@ void blockBegin(int first_address)
  * 前のスタック型記憶領域を復帰する */
 void blockEnd(void)
 {
-  block_level--;  /* ブロックレベルを元に戻す */
+  current_block_level--;  /* ブロックレベルを元に戻す */
 
-  /* 名前表インデックスと, ローカル変数アドレスの復帰 */
-  table_index = last_index[block_level];
-  local_addr  = last_addr[block_level];
+  /* 名前表インデックスと, ローカル変数アドレス,
+   * ブロックの種類の復帰 */
+  table_index = last_index[current_block_level];
+  local_addr  = last_addr[current_block_level];
+}
+
+/* 現ブロックのbreakラベルの数を得る */
+int getBreakCount(void)
+{
+  return break_label_count[current_block_level];
+}
+
+/* 現ブロックのbreakラベルの数を増やして返す */
+int incBreakCount(void)
+{
+  return ++break_label_count[current_block_level];
+}
+
+/* 現ブロックのcontinueラベルの数を得る */
+int getContinueCount(void)
+{
+  return continue_label_count[current_block_level];
+}
+
+/* 現ブロックのcontinueラベルの数を増やして返す */
+int incContinueCount(void)
+{
+  return ++continue_label_count[current_block_level];
 }
 
 /* 現在のブロックレベルを得る
- * block_levelのスコープをグローバルにしない */
+ * current_block_levelのスコープをグローバルにしない */
 int getBlockLevel(void)
 {
-  return block_level;
+  return current_block_level;
+}
+
+/* 現在のブロックの種類を得る */
+BlockKind getBlockKind(void)
+{
+  return block_kind[current_block_level-1];
 }
 
 /* 最後に登録した関数の仮引数の個数を返す */

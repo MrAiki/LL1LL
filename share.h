@@ -1,6 +1,15 @@
 #ifndef SHARE_H_INCLUDED
 #define SHARE_H_INCLUDED
 
+#define FIRST_LOCAL_ADDRESS (2) /* 各ブロックの最初のローカル変数のアドレス:0にはディスプレイが指すアドレス, 1には戻りアドレスが入る */
+/* 一回のfgetsで取得する最大文字数 */
+#define MAX_LEN_SOURCE_LINE    (200)
+/* 識別子の最大長 */
+#define MAX_LEN_IDENTIFIER     (30) 
+/* 数字リテラルの最大桁数 */
+#define MAX_LEN_NUMBER_LITERAL (30)
+/* 文字列リテラルの最大文字数 */
+#define MAX_LEN_STRING_LITERAL (50)
 /* エラー時の文字列バッファの長さ */
 #define LINE_BUF_SIZE (100)
 /* ブロックの最大深さ FIXME:こっちも動的確保できるように修正 */
@@ -17,7 +26,7 @@
   ((value.type == LL1LL_OBJECT_TYPE) && (value.u->object.type == ARRAY_OBJECT))
 
 /* LL1LLの値の不完全型宣言(配列で参照される...) */
-typedef struct LL1LL_Value_tag *LL1LL_Value;
+typedef struct LL1LL_Value_tag *LL1LL_Value_ptr;
 
 /* LL1LLの型の種類 */
 typedef enum {
@@ -45,7 +54,7 @@ typedef enum {
 typedef struct {
   int size;                 /* 配列の要素数 */
   int alloc_size;           /* 割り当てサイズ */
-  LL1LL_Value *array_value; /* 配列そのもの */
+  LL1LL_Value_ptr array_value;  /* 配列そのもの */
 } LL1LL_Array;
 
 /* LL1LLの文字列の構造体 */
@@ -68,7 +77,7 @@ typedef struct LL1LL_Object_tag {
 } LL1LL_Object;
 
 /* LL1LLの値の構造体 */
-struct LL1LL_Value_tag {
+typedef struct LL1LL_Value_tag {
   LL1LL_TypeKind type;  /* 型 */
   union {
     int           int_value;      /* 整数値 */
@@ -76,7 +85,7 @@ struct LL1LL_Value_tag {
     LL1LL_Boolean boolean_value;  /* 論理値 */
     LL1LL_Object  *object;        /* オブジェクト参照 */
   } u;
-};
+} LL1LL_Value;
 
 /* 入力ソース */
 extern FILE* input_source;

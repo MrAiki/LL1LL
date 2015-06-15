@@ -4,7 +4,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "share.h"
+#include "error.h"
+#include "MEM.h"
 
 #define MAX_TABLE_SIZE  (200)  /* 名前表の最大長 FIXME:メモリの限界まで伸ばせるように */
 
@@ -17,6 +18,14 @@ typedef enum {
   CONST_IDENTIFIER, /* 定数の識別子 */
   PARAM_IDENTIFIER, /* 関数の仮引数の識別子 */
 } IdentifierKind;
+
+/* ブロックの種類 */
+typedef enum {
+  FUNCTION_BLOCK, /* 関数ブロック */
+  LOOP_BLOCK,     /* ループ(for, while, do while)ブロック */
+  TOPLEVEL,       /* トップレベル */
+  OTHER_BLOCK,    /* その他のブロック if, switchとか */
+} BlockKind;
 
 /* 変数, 仮引数, 関数の, スタック型記憶域のアドレス */
 typedef struct {
@@ -31,7 +40,7 @@ void addTableName(char *identifier);
 /* 名前表登録ルーチン. 返り値は現在のエントリ数 */
 int addTableFunc(char *identifier, int address); /* 名前表に関数を登録. 先頭pcを与える */
 int addTableParam(char *identifier); /* 名前表に仮引数を登録. */
-int addTableVar(char *identifier);                  /* 名前表に変数と, その値を登録 */
+int addTableVar(char *identifier);                  /* 名前表に変数を登録 */
 int addTableConst(char *identifier, LL1LL_Value v); /* 名前表に定数と, その値を登録 */
  
 /* 関数のアドレス仕上げ関係 */
@@ -48,10 +57,15 @@ LL1LL_Value getConstValue(int table_index);        /* 定数の値を得る */
 int getNumParams(int table_index);            /* 関数の仮引数の数を得る */
 
 /* ブロック関連のモジュール */
-void blockBegin(int first_address); /* ブロックの開始で呼ばれ, スタック型記憶領域を更新する */
+void blockBegin(int first_address, BlockKind kind); /* ブロックの開始で呼ばれ, スタック型記憶領域を更新する */
 void blockEnd(void);                /* ブロックの終了で呼ばれ, 前のスタック型記憶域を復帰する */
 int getBlockLevel(void);            /* 現ブロックのレベルを得る */
+BlockKind getBlockKind(void);       /* 現ブロックの種類を得る */
 int getCurrentNumParams(void);      /* 最後に登録した関数のパラメタ数を得る */
 int getBlockNeedMemory(void);       /* 現在のブロックが必要とするメモリ容量 */
+int getBreakCount(void);            /* 現ブロックのbreakラベルの数を返す */
+int incBreakCount(void);            /* 現ブロックのcontinueラベルの数を増やして返す */
+int getContinueCount(void);         /* 現ブロックのcontinueラベルの数を返す */
+int incContinueCount(void);            /* 現ブロックのbreakラベルの数を増やして返す */
 
 #endif /* TABLE_H_INCLUDED */
