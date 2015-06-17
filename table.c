@@ -21,6 +21,7 @@ static int table_func_index;  /* 現在参照している関数の名前表の�
 static int current_block_level = -1;  /* 現在のブロックレベル */
 
 /* TODO:ブロックの情報を構造体にまとめる */
+static int display[MAX_BLOCK_LEVEL];    /* 各ブロックの先頭スタック記憶域アドレス */
 static int last_index[MAX_BLOCK_LEVEL]; /* i番目の要素は, ブロックレベルiの最後の名前表のインデックス */
 static int last_addr[MAX_BLOCK_LEVEL];  /* i番目の要素は, ブロックレベルiの最後の変数のアドレス */
 static int block_kind[MAX_BLOCK_LEVEL]; /* i番目の要素は, ブロックレベルiの種類 */
@@ -38,7 +39,7 @@ void addTableName(char *identifier)
     strcpy(name_table[table_index].name, identifier);
   } else {
     fprintf(stderr, "Too many name table entry... \n TODO:Substitute tabel array to pointer one. \n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 }
 
@@ -71,7 +72,7 @@ int addTableVar(char *identifier)
   addTableName(identifier);
   name_table[table_index].kind = VAR_IDENTIFIER;
   name_table[table_index].u.rel_address.block_level = current_block_level;  /* 現在のブロックレベル */
-  name_table[table_index].u.rel_address.address     = local_addr++; /* ローカル変数のアドレスを更新しつつ登録 */
+  name_table[table_index].u.rel_address.address     = local_addr++; /* ローカル変数のアドレスを登録しつつ更新 */
   return table_index;
 }
 
@@ -114,7 +115,7 @@ int searchTable(char *identifier, IdentifierKind kind)
   /* スタック型領域のため, 探索は末尾から始める */
   int i = table_index;
 
-  /* 0番目に番兵を立てる */
+  /* 0番目に番兵を立てる:0番目に探索対象の変数名が入る */
   strcpy(name_table[0].name, identifier);
 
   /* 探索 */
@@ -131,6 +132,7 @@ int searchTable(char *identifier, IdentifierKind kind)
     if (kind == VAR_IDENTIFIER) {
       return addTableVar(identifier);
     }
+    /* make compiler happy */
     return 0;
   }
 
@@ -170,6 +172,7 @@ void blockBegin(int first_address, BlockKind kind)
     local_addr    = first_address; /* (FIRST_LOCAL_ADDRESSが入る) */
     table_index   = 0;             /* 名前表インデックスの初期化 */
     block_kind[0] = TOPLEVEL;      /* ブロックの種類をトップレベルに */
+    display[0]    = 0;             /* トップレベルのディスプレイは0 */
     /* ラベルの個数を全てリセット */
     for (i = 0; i < MAX_BLOCK_LEVEL; i++) {
       break_label_count[i] = 0;
@@ -190,7 +193,10 @@ void blockBegin(int first_address, BlockKind kind)
   /* 現在のブロックの情報を保存 */
   last_index[current_block_level] = table_index;  /* 名前表インデックス */
   last_addr[current_block_level]  = local_addr;   /* ローカル変数のインデックス */
-  block_kind[current_block_level] = kind;         /* 現在のブロックの種類 */
+  /* 関数ブロック以外では, displayは前のアドレスを加算 */
+  if (kind != FUNCTION_BLOCK) {
+    display[current_block_level+1] = display[current_block_level] + local_addr;
+  } 
   /* ラベルの個数を初期化 */
   break_label_count[current_block_level]    = 0;
   continue_label_count[current_block_level] = 0;
@@ -199,6 +205,7 @@ void blockBegin(int first_address, BlockKind kind)
   local_addr              = first_address;
   /* ブロックレベルの更新 */
   current_block_level++;
+  block_kind[current_block_level] = kind;         /* ブロックの種類をセット */
 
 }
 
@@ -261,4 +268,16 @@ int getCurrentNumParams(void)
 int getBlockNeedMemory(void)
 {
   return local_addr;
+}
+
+/* block_level番目のディスプレイにアドレス値をセット */
+void setDisplayAt(int block_level, int local_addr)
+{
+  display[block_level] = local_addr;
+}
+
+/* block_level番目のディスプレイの値を得る */
+int getDisplayAt(int block_level)
+{
+  return display[block_level];
 }

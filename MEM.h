@@ -18,6 +18,9 @@ typedef void (*MEM_ErrorHandler)(MEM_Controller, char *, int, char *);
 /* メモリストレージの不完全型宣言 */
 typedef struct MEM_Storage_tag *MEM_Storage;
 
+/* デフォルトのコントローラの宣言(中身はプライベート) */
+extern MEM_Controller mem_default_controller;
+
 /* MEM_CURRENT_CONTROLLER - 現在のメモリコントローラのセット
  * MEM_CONTROLLERにマクロが定義されていなければ, mem_default_controller(memory.c)を使う */
 #ifdef MEM_CONTROLLER

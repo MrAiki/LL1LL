@@ -17,13 +17,13 @@
 
 /* 文字列型を判定するマクロ */
 #define is_string(value) \
-  ((value.type == LL1LL_OBJECT_TYPE) && (value.u->object.type == STRING_OBJECT))
+  ((value.type == LL1LL_OBJECT_TYPE) && (value.u.object->type == STRING_OBJECT))
 /* 文字列のポインタを得る */
 #define get_string_value(value) \
-  (value.u->object.u.str.string_value)
+  (value.u.object->u.str.string_value)
 /* 配列型を判定するマクロ */
 #define is_array(value) \
-  ((value.type == LL1LL_OBJECT_TYPE) && (value.u->object.type == ARRAY_OBJECT))
+  ((value.type == LL1LL_OBJECT_TYPE) && (value.u.object->type == ARRAY_OBJECT))
 
 /* LL1LLの値の不完全型宣言(配列で参照される...) */
 typedef struct LL1LL_Value_tag *LL1LL_Value_ptr;

@@ -68,12 +68,14 @@ int genCodeValue(LVM_OpCode opcode, LL1LL_Value);     /* オペランドには�
 int genCodeTable(LVM_OpCode opcode, int table_index); /* オペランドには記号表のインデックス */
 int genCodeCalc(LVM_OpCode opcode);                   /* 演算命令の生成 */
 int genCodeJump(LVM_OpCode opcode, int jump_pc);      /* jump系命令の生成 */
-int genCodeMove(LVM_OpCode opecode, int move_top);    /* トップ移動命令の生成 */
+int genCodeMove(LVM_OpCode opcode, int move_top);    /* トップ移動命令の生成 */
 int genCodeReturn(void);                              /* return命令の生成 */
 void backPatch(int program_count);                    /* 引数のプログラムカウンタの命令をバックパッチ. 飛び先はこの関数を呼んだ次の命令. */
 void changeJumpPc(int pc, int jump_pc);               /* pcのジャンプ命令の飛び先をjump_pcに変更する */
+void changeMoveTop(int pc, int move_top);             /* pcのトップ移動量をmove_topに変更する */
 int nextCode(void);                                   /* 次のプログラムカウンタを返す */
 
+int getCodeSize(void);                                /* 現在のコードサイズを得る */
 LVM_Instruction *get_instruction(void);               /* 命令列のポインタを得る */
 
 /* デバッグ用・pc番目の命令の表示 */

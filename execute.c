@@ -14,6 +14,8 @@ static LL1LL_Value do_calculate(LL1LL_Value left,
 static LL1LL_Value do_compare(LL1LL_Value left, 
                               LL1LL_Value right,
                               LVM_OpCode);
+/* スタックのstack_pの要素を印字 */
+static void printStackElement(int stack_p);
 
 /* スタックトップを得る */
 int get_stack_top(void)
@@ -31,23 +33,29 @@ LL1LL_Value *get_stack_pointer(void)
 void execute(void)
 {
   int pc;                                     /* プログラムカウンタ */
-  int temp_level, temp_value;                 /* ブロックレベルと値のテンポラリ */
+  int temp_level;                             /* ブロックレベルと */
+  LL1LL_Value temp_value;                     /* 値のテンポラリ */
   LVM_Instruction *code = get_instruction();  /* 命令列 */
+  int code_size         = getCodeSize();      /* 命令列のサイズ */
   LVM_Instruction inst;                       /* 現在の命令 */
-  int display[MAX_BLOCK_LEVEL];               /* ディスプレイの配列:各ブロックの先頭アドレス */
+  /* int display[MAX_BLOCK_LEVEL] = {0};      ディスプレイの配列:各ブロックの先頭アドレス => tableに移動 */
 
   /* ---実行開始--- */
-  top = 0; pc = 0;              /* スタックトップ, pcの初期化 */
-  /* レベル0の... */
-  stack[top].u.int_value   = 0; /* ディスプレイの退避場所 */
-  stack[top+1].u.int_value = 0; /* 戻り番地 */
-  display[0]               = 0; /* トップレベルの戻り番地:0 */
+  top = 0; pc = 0;               /* スタックトップ, pcの初期化 */
+  /* レベル0(トップレベル)の... */
+  stack[top].u.int_value   = 0;  /* ディスプレイの退避場所 */
+  stack[top+1].u.int_value = 0;  /* 戻り番地(終了番地) */
+  /* display[0]               = 0;   トップレベルの先頭番地:0 */
+  setDisplayAt(0,0);             /* トップレベルの先頭番地:0 */
   
   /* ---命令実行--- */
   do {
     inst = code[pc++];  /* これから実行する命令語を取得 */
     /* 命令分岐 */
     switch (inst.opcode) {
+      case LVM_NOP:
+        /* 何もしない */
+        break;
       case LVM_MOVE_STACK_P:
         /* スタックポインタの移動 */
         top += inst.u.move_top;
@@ -60,13 +68,17 @@ void execute(void)
       case LVM_PUSH_VALUE:
         /* 変数のプッシュ : スタック記憶域からアドレスを取得してプッシュ */
         stack[top++] 
-          = stack[display[inst.u.address.block_level] 
+          = stack[getDisplayAt(inst.u.address.block_level)
                     + inst.u.address.address];
+          /* = stack[display[inst.u.address.block_level] 
+                    + inst.u.address.address]; */
         break;
       case LVM_POP_VARIABLE:
         /* 変数のポップ : アドレスを指定してポップ */
-        stack[display[inst.u.address.block_level] 
-                + inst.u.address.address] = stack[--top];
+        stack[getDisplayAt(inst.u.address.block_level)
+                    + inst.u.address.address] = stack[--top];
+        /* stack[display[inst.u.address.block_level] 
+                + inst.u.address.address] = stack[--top]; */
         break;
       case LVM_POP:
         /* 単純にトップを一つずらすだけ */
@@ -96,17 +108,23 @@ void execute(void)
       case LVM_INVOKE:
         /* 関数呼び出し */
         temp_level = inst.u.address.block_level + 1;    /* 関数ブロック内のレベルは呼び出したブロック+1 */
-        stack[top].u.int_value   = display[temp_level]; /* ディスプレイの退避 */
+        /* stack[top].u.int_value   = display[temp_level];  ディスプレイの退避 */
+        stack[top].type          = LL1LL_INT_TYPE;
+        stack[top].u.int_value   = getDisplayAt(temp_level);
+        stack[top+1].type        = LL1LL_INT_TYPE;
         stack[top+1].u.int_value = pc;                  /* 戻り先のpc(現在のpc) */
-        display[temp_level]      = top;                 /* 関数内のディスプレイは現在のtopを指させる */
+        /* display[temp_level]      = top;                 関数内のディスプレイは現在のtopを指させる */
+        setDisplayAt(temp_level, top);
         pc = inst.u.address.address;                    /* 関数内部へジャンプ */
         break;
       case LVM_RETURN:
         /* 関数からのリターン */
         temp_value   = stack[--top];                        /* 戻り値の確保 */
-        top          = display[inst.u.address.block_level]; /* スタックトップを呼び出し側の値に戻す */
-        display[inst.u.address.block_level] = stack[top];   /* ディスプレイ情報の復帰 */
-        pc           = stack[top+1];                        /* 戻り先のpcにセット */
+        /* top          = display[inst.u.address.block_level];  スタックトップを呼び出し側の値に戻す */
+        top          = getDisplayAt(inst.u.address.block_level);
+        /* display[inst.u.address.block_level] = stack[top].u.int_value;   ディスプレイ情報の復帰 */
+        setDisplayAt(inst.u.address.block_level, stack[top].u.int_value);
+        pc           = stack[top+1].u.int_value;                        /* 戻り先のpcにセット */
         top         -= inst.u.address.address;              /* 実引数の数だけトップを移動 */
         stack[top++] = temp_value;                          /* 戻り値をトップにセット */
         break;
@@ -137,17 +155,24 @@ void execute(void)
       case LVM_GREATER:       /* FALLTHRU */
       case LVM_GREATER_EQUAL: /* FALLTHRU */
       case LVM_LESSTHAN:      /* FALLTHRU */
-      case LESSTHAN_EQUAL:
+      case LVM_LESSTHAN_EQUAL:
         top--;
         stack[top-1] 
           = do_compare(stack[top-1], stack[top], inst.opcode);
         break;
       default:
         fprintf(stderr, "Error! Invailed opecode \n");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
-  } while (pc != 0);
 
+    /* デバッグ用, スタックの状態を表示 */
+    printStack();
+    printf("pc : %4d ", pc);
+    printCode(pc);
+  } while (pc <= code_size);
+  /* } while (pc != 0); */
+
+  /* TODO:*code の解放 */
 }
 
 /* 単項演算の実行 */
@@ -171,7 +196,7 @@ do_single_calc(LL1LL_Value term, LVM_OpCode code)
           break;
         default:
           fprintf(stderr, "Invailed type for single term minus \n");
-          exit(1);
+          exit(EXIT_FAILURE);
       }
       break;
     case LVM_LOGICAL_NOT:
@@ -185,7 +210,7 @@ do_single_calc(LL1LL_Value term, LVM_OpCode code)
         }
       } else {
         fprintf(stderr, "Invailed type for single term logical not \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_INCREMENT:
@@ -195,7 +220,7 @@ do_single_calc(LL1LL_Value term, LVM_OpCode code)
         ret_value.u.int_value = term.u.int_value + 1;
       } else {
         fprintf(stderr, "Invailed type for single term increment \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_DECREMENT:
@@ -205,12 +230,12 @@ do_single_calc(LL1LL_Value term, LVM_OpCode code)
         ret_value.u.int_value = term.u.int_value - 1;
       } else {
         fprintf(stderr, "Invailed type for single term decrement \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     default:
       fprintf(stderr, "Error! Invailed opecode in single calc \n");
-      exit(1);
+      exit(EXIT_FAILURE);
   }
   return ret_value;
 
@@ -276,7 +301,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 加算の型エラー */
         fprintf(stderr, "Error! Invailed type in add \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_SUB:
@@ -309,7 +334,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 減算の型エラー */
         fprintf(stderr, "Error! Invailed type in add \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_MUL:
@@ -346,7 +371,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 積算の型エラー */
         fprintf(stderr, "Error! Invailed type in mul \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_DIV:
@@ -356,7 +381,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
         /* 左辺がint, 右辺がint */
         if (right.u.int_value == 0) {
           fprintf(stderr, "Zero division detected! \n");
-          exit(1);
+          exit(EXIT_FAILURE);
         }
         ret_value.u.int_value = left.u.int_value / right.u.int_value;
       } else if (left.type == LL1LL_DOUBLE_TYPE
@@ -375,7 +400,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 除算の型エラー */
         fprintf(stderr, "Error! Invailed type in div \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_MOD:
@@ -385,7 +410,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
         /* 左辺がint, 右辺がint */
         if (right.u.int_value == 0) {
           fprintf(stderr, "Zero modulo detected! \n");
-          exit(1);
+          exit(EXIT_FAILURE);
         }
         ret_value.u.int_value = left.u.int_value % right.u.int_value;
       } else if (left.type == LL1LL_DOUBLE_TYPE
@@ -404,7 +429,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 除算の型エラー */
         fprintf(stderr, "Error! Invailed type in mod \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_POW:
@@ -414,7 +439,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
         /* 左辺がint, 右辺がint */
         if (left.u.int_value == 0) {
           fprintf(stderr, "Zero power detected! \n");
-          exit(1);
+          exit(EXIT_FAILURE);
         }
         ret_value.u.int_value = (int)pow((double)left.u.int_value,
                                          (double)right.u.int_value);
@@ -437,8 +462,9 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 累乗の型エラー */
         fprintf(stderr, "Error! Invailed type in pow \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
+      break;
     case LVM_LOGICAL_AND:
       /* 論理積 */
       if (left.type == LL1LL_BOOLEAN_TYPE 
@@ -452,7 +478,7 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 論理積の型エラー */
         fprintf(stderr, "Error! Invailed type in logical and \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_LOGICAL_OR:
@@ -468,12 +494,12 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 論理積の型エラー */
         fprintf(stderr, "Error! Invailed type in logical and \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     default:
       fprintf(stderr, "Error! Invailed opecode in binary calc \n");
-      exit(1);
+      exit(EXIT_FAILURE);
   }
   return ret_value;
 
@@ -508,7 +534,8 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がdouble, 右辺がdouble */
-        if (left.u.double_value == right.u.double_value) {
+        if (fabs(left.u.double_value - right.u.double_value)
+            < DBL_EPSILON) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -524,8 +551,9 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in equal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
+      break;
     case LVM_NOT_EQUAL:
       /* 不等号 */
       if (left.type == LL1LL_BOOLEAN_TYPE
@@ -547,7 +575,8 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がdouble, 右辺がdouble */
-        if (left.u.double_value != right.u.double_value) {
+        if (fabs(left.u.double_value - right.u.double_value)
+            >= DBL_EPSILON) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -563,7 +592,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in not equal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_GREATER:
@@ -580,7 +609,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_INT_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がint, 右辺がdouble */
-        if (left.u.int_value > right.u.double_value) {
+        if ((double)left.u.int_value > right.u.double_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -588,7 +617,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_INT_TYPE) {
         /* 左辺がdouble, 右辺がint */
-        if (left.u.double_value > right.u.int_value) {
+        if (left.u.double_value > (double)right.u.int_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -620,7 +649,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in greater\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_GREATER_EQUAL:
@@ -628,7 +657,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       if (left.type == LL1LL_INT_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がint, 右辺がdouble */
-        if (left.u.int_value >= right.u.double_value) {
+        if ((double)left.u.int_value >= right.u.double_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -636,7 +665,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_INT_TYPE) {
         /* 左辺がdouble, 右辺がint */
-        if (left.u.double_value >= right.u.int_value) {
+        if (left.u.double_value >= (double)right.u.int_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -668,7 +697,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in greater equal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_LESSTHAN:
@@ -685,7 +714,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_INT_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がint, 右辺がdouble */
-        if (left.u.int_value < right.u.double_value) {
+        if ((double)left.u.int_value < right.u.double_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -693,7 +722,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_INT_TYPE) {
         /* 左辺がdouble, 右辺がint */
-        if (left.u.double_value < right.u.int_value) {
+        if (left.u.double_value < (double)right.u.int_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -725,7 +754,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in less than\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     case LVM_LESSTHAN_EQUAL:
@@ -733,7 +762,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       if (left.type == LL1LL_INT_TYPE
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がint, 右辺がdouble */
-        if (left.u.int_value <= right.u.double_value) {
+        if ((double)left.u.int_value <= right.u.double_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -741,7 +770,7 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (left.type == LL1LL_DOUBLE_TYPE
                  && right.type == LL1LL_INT_TYPE) {
         /* 左辺がdouble, 右辺がint */
-        if (left.u.double_value <= right.u.int_value) {
+        if (left.u.double_value <= (double)right.u.int_value) {
           ret_value.u.boolean_value = LL1LL_TRUE;
         } else {
           ret_value.u.boolean_value = LL1LL_FALSE;
@@ -773,13 +802,76 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else {
         /* 比較の型エラー */
         fprintf(stderr, "Error! Invailed type in less than equal\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       break;
     default:
       fprintf(stderr, "Error! Invailed opecode in binary compare \n");
-      exit(1);
+      exit(EXIT_FAILURE);
   }
   return ret_value;
 
 }
+
+/* スタックの要素の印字 */
+static void printStackElement(int stack_p)
+{
+  /* スタックの値と, 型の取得 */
+  LL1LL_Value val = stack[stack_p];
+  LL1LL_TypeKind type = val.type;
+
+  /* 型で場合分けして印字 */
+  switch (type) {
+    case LL1LL_INT_TYPE:
+      printf("%4d : int_value : %d", stack_p, val.u.int_value);
+      break;
+    case LL1LL_DOUBLE_TYPE:
+      printf("%4d : double_value : %f", stack_p, val.u.double_value);
+      break;
+    case LL1LL_BOOLEAN_TYPE:
+      if (val.u.boolean_value == LL1LL_TRUE) {
+        printf("%4d : boolean_value : true", stack_p);
+      } else {
+        printf("%4d : boolean_value : false", stack_p);
+      }
+      break;
+    case LL1LL_OBJECT_TYPE:
+      switch (val.u.object->type) {
+        case ARRAY_OBJECT:
+          /* TODO */
+          break;
+        case STRING_OBJECT:
+          printf("%4d : string_object : \"%s\"", stack_p, val.u.object->u.str.string_value);
+          break;
+        default:
+          break;
+      }
+      break;
+    default:
+      fprintf(stderr, "Error invaild type for printStackElement \n");
+      break;
+  }
+
+  /* printf("\n"); */
+
+}
+
+/* スタックの印字 */
+void printStack(void)
+{
+  int i;
+  /* トップから下まで順に印字 */
+  puts("---------------------------");
+  /* top-1 */
+  for (i = 10; i >= 0; i--) {
+    printStackElement(i);
+    if (i == top) {
+      printf("  <- top");
+    }
+    printf("\n");
+    puts("---------------------------");
+  }
+
+  puts("");
+}
+

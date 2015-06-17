@@ -24,7 +24,7 @@ typedef enum {
   FUNCTION_BLOCK, /* 関数ブロック */
   LOOP_BLOCK,     /* ループ(for, while, do while)ブロック */
   TOPLEVEL,       /* トップレベル */
-  OTHER_BLOCK,    /* その他のブロック if, switchとか */
+  NORMAL_BLOCK,   /* 文に平書きされたブロック */
 } BlockKind;
 
 /* 変数, 仮引数, 関数の, スタック型記憶域のアドレス */
@@ -66,6 +66,8 @@ int getBlockNeedMemory(void);       /* 現在のブロックが必要とする�
 int getBreakCount(void);            /* 現ブロックのbreakラベルの数を返す */
 int incBreakCount(void);            /* 現ブロックのcontinueラベルの数を増やして返す */
 int getContinueCount(void);         /* 現ブロックのcontinueラベルの数を返す */
-int incContinueCount(void);            /* 現ブロックのbreakラベルの数を増やして返す */
+int incContinueCount(void);         /* 現ブロックのbreakラベルの数を増やして返す */
+int getDisplayAt(int block_level); /* block_levelにおけるディスプレイの値を得る */  
+void setDisplayAt(int block_level, int address); /* block_levelにおけるディスプレイの値をaddressにセット */
 
 #endif /* TABLE_H_INCLUDED */

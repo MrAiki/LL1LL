@@ -41,7 +41,8 @@ int genCodeCalc(LVM_OpCode opcode)
 int genCodeReturn(void)
 {
   /* 直前の命令がreturnならば, 連続returnになるので
-   * すぐに終わる */
+   * すぐに終わる
+   * FIXME:最後が関数定義だとあかん */
   if (code[current_code_size].opcode == LVM_RETURN) 
     return current_code_size;
 
@@ -97,6 +98,18 @@ void backPatch(int program_count)
 void changeJumpPc(int pc, int jump_pc)
 {
   code[pc].u.jump_pc = jump_pc;
+}
+
+/* pcのトップ移動量をmove_topに変更 */
+void changeMoveTop(int pc, int move_top)
+{
+  code[pc].u.move_top = move_top;
+}
+
+/* 現在のコードサイズを得る */
+int getCodeSize(void)
+{
+  return current_code_size;
 }
 
 /* 命令列の最初の要素へのポインタを得る */

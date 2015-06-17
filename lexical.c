@@ -207,7 +207,7 @@ static Token st_nextToken(void)
           } else if (temp_token.kind == FALSE_LITERAL) {
             temp_token.u.boolean_value = LL1LL_FALSE;
           }
-          /* printToken(temp_token); */
+          /* printToken(temp_token);  */
           return temp_token;
         }
       }
@@ -402,7 +402,7 @@ static Token st_nextToken(void)
           temp_token.kind = NOT_EQUAL;
           break;
         default:  /* '!' */
-          temp_token.kind = LOGICAL_AND;
+          temp_token.kind = LOGICAL_NOT;
           break;
       }
       break;

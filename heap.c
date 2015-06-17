@@ -1,5 +1,9 @@
 #include "heap.h"
 
+/* FIXME: 定数に代入したオブジェクトはどうする
+ *        アイデア:記号表を走査し, constならばマーク
+ *        あるいは, constならスイープしない          */
+
 /* ヒープ領域の先頭を指すポインタ */
 static LL1LL_Object *heap_head;
 
@@ -15,6 +19,7 @@ static void addHeapEntry(LL1LL_Object *entry)
 {
   if (heap_head == NULL) {
     /* 初期状態ならば, 前後ろ共にNULLで初期化 */
+    heap_head       = entry;    /* 先頭に挿入 */
     heap_head->prev = NULL;
     heap_head->next = NULL;
   } else {
@@ -22,8 +27,8 @@ static void addHeapEntry(LL1LL_Object *entry)
     heap_head->prev = entry;      /* 先頭の前に追加 */
     entry->next     = heap_head;  /* エントリの次は先頭 */
     entry->prev     = NULL;       /* エントリの前はNULL */
+    heap_head       = entry;      /* 先頭の更新 */
   }
-  heap_head         = entry;      /* 先頭の更新 */
 }
 
 /* 双方向リストのエントリを削除する
@@ -95,18 +100,18 @@ static void array_mark(LL1LL_Object *ary_ptr)
   ary_ptr->marked = LL1LL_TRUE; /* まず, 根本をマーク */
 
   /* 配列要素のマーク */
-  for (i = 0; i < ary_ptr->ary.size; i++) {
-    ary_i = ary_ptr->ary.array_value[i];  /* 要素を取得 */
+  for (i = 0; i < ary_ptr->u.ary.size; i++) {
+    ary_i = ary_ptr->u.ary.array_value[i];  /* 要素を取得 */
     if (ary_i.type != LL1LL_OBJECT_TYPE) {
       /* オブジェクト型でないなら次へ */
       continue;
     } else {
       /* オブジェクト型の場合 */
-      if (ary_i->object.type == STRING_OBJECT) {
-        ary_i->object.marked = LL1LL_TRUE; /* 文字列ならそのままマーク */
+      if (ary_i.u.object->type == STRING_OBJECT) {
+        ary_i.u.object->marked = LL1LL_TRUE; /* 文字列ならそのままマーク */
       } else {
         /* should be ARRAY_OBJECT here */
-        array_mark(tmp.object);            /* 配列のマーク */
+        array_mark(ary_i.u.object);            /* 配列のマーク */
       }
     }
   }
@@ -120,21 +125,21 @@ static void array_sweep(LL1LL_Object *ary_ptr)
   LL1LL_Value ary_i;
 
   /* 配列要素のスイープ */
-  for (i = 0; i < ary_ptr->ary.size; i++) {
-    ary_i = ary_ptr->ary.array_value[i];  /* 要素を取得 */
+  for (i = 0; i < ary_ptr->u.ary.size; i++) {
+    ary_i = ary_ptr->u.ary.array_value[i];  /* 要素を取得 */
     if (ary_i.type != LL1LL_OBJECT_TYPE) {
       /* オブジェクト型でないなら次へ */
       continue;
     } else {
       /* オブジェクト型の場合 */
-      if (ary_i->object.marked == LL1LL_FALSE) {
+      if (ary_i.u.object->marked == LL1LL_FALSE) {
         /* マークがFALSE => スイープ（解放） */
-        if (ary_i->object.type == STRING_OBJECT) {
-          MEM_free(ary_i.object); /* 文字列ならばそのまま解放 */
+        if (ary_i.u.object->type == STRING_OBJECT) {
+          MEM_free(ary_i.u.object); /* 文字列ならばそのまま解放 */
         } else {
           /* should be ARRAY_OBJECT here */
           /* 配列ならば要素のスイープ */
-          array_sweep(ary_i.object);
+          array_sweep(ary_i.u.object);
         }
       }
 
@@ -153,8 +158,8 @@ static void gc_mark(void)
 {
   int i;
   /* スタックトップと, スタックを指すポインタを取得 */
-  int stack_top        = get_stack_top();     /* TODO:まだない */
-  LL1LL_Value *stack_p = get_stack_pointer(); /* TODO:まだない */
+  int stack_top        = get_stack_top();  
+  LL1LL_Value *stack_p = get_stack_pointer(); 
   LL1LL_Object *pos;
 
   /* 全マークをリセット */
@@ -168,11 +173,11 @@ static void gc_mark(void)
       continue;
     } else {
       /* マークを付ける */
-      if (stack_p[i]->object.type == STRING_OBJECT) {
-        stack_p[i]->object.marked = LL1LL_TRUE;
+      if (stack_p[i].u.object->type == STRING_OBJECT) {
+        stack_p[i].u.object->marked = LL1LL_TRUE;
       } else {
         /* should be ARRAY_OBJECT here */
-        array_mark(stack_p[i].object);  /* 配列マークのルーチンへ */
+        array_mark(stack_p[i].u.object);  /* 配列マークのルーチンへ */
       }
     }
   }

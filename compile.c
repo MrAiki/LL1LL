@@ -47,7 +47,9 @@ int compile(void)
   initSource();                        /* 字句解析の準備 */
   token = nextToken();                 /* 最初の先読みトークンを読む */
   blockBegin(FIRST_LOCAL_ADDRESS, TOPLEVEL);  /* スタック型記憶域の初期化も兼ねてブロックをセット */
+  genCodeMove(LVM_MOVE_STACK_P, getBlockNeedMemory());  /* 復帰情報の分を含めてトップを移動 */
   toplevel();                          /* トップレベルからコンパイル */
+  blockEnd();                                 /* ブロックの終了 */
 
   return 0;   /* TODO: エラー個数を返すようにする */
 }
@@ -55,6 +57,7 @@ int compile(void)
 /* トップレベルのコンパイル */
 static void toplevel(void)
 {
+
   while (token.kind != END_OF_FILE) {
     switch (token.kind) {
       case VAR:               /* 変数定義 */
@@ -74,6 +77,7 @@ static void toplevel(void)
         continue;
     }
   }
+
 }
 
 /* 変数宣言/定義のコンパイル */
@@ -88,18 +92,15 @@ static void varDecl(void)
     /* IDENTIFIER -> ASSIGNの並びを確認 */
     name_temp = token;
     token = checkGetToken(token, IDENTIFIER);
-    addTableVar(name_temp.u.identifier);      /* 名前表に登録 */
+    table_index = addTableVar(name_temp.u.identifier);      /* 名前表に登録 */
 
     /* 代入が来たらば宣言と同時に値を代入する */
     if (token.kind == ASSIGN) {
       token = nextToken();
       /* 代入する変数のプッシュ */
       logical_or_expression();
-      /* 今宣言した変数の探索 */
-      table_index = searchTable(name_temp.u.identifier, VAR_IDENTIFIER);
       /* 変数にプッシュ */
       genCodeTable(LVM_POP_VARIABLE, table_index);
-
     } 
 
     /* 次にコンマが出ていたら変数定義が続く */
@@ -248,11 +249,19 @@ static void funcDecl(void)
 /* 関数ブロックのコンパイル */
 static void function_block(int function_index)
 {
+  /* 関数の終わりに飛び越すラベルと, ローカル変数容量のラベル */
+  int func_end_label;
+  int func_local_vars_label;
+  /* デフォルトの返り値(明示的にreturnしない時の返り値) */
+  LL1LL_Value default_return = {.type = LL1LL_INT_TYPE, .u.int_value = 0};
 
-  /* まず, 関数の飛び先アドレスを次の命令にセットし,
+  /* 関数定義の時は, 必ず本体は飛び越す */
+  func_end_label = genCodeJump(LVM_JUMP, 0);
+
+  /* 関数の飛び先アドレスを次の命令にセットし,
    * スタック必要量だけスタックトップを移動する */
   changeFuncAddr(function_index, nextCode());
-  genCodeMove(LVM_MOVE_STACK_P, getBlockNeedMemory());
+  func_local_vars_label = genCodeMove(LVM_MOVE_STACK_P, 0);
 
   while (1) {
     if (token.kind == RIGHT_BRACE
@@ -277,9 +286,14 @@ static void function_block(int function_index)
     } 
   }
 
-  /* 強制的に戻るreturn命令を生成
-   * TODO:どこからでもreturnできるように */
+  /* 関数の必要なブロック量を確定 */
+  changeMoveTop(func_local_vars_label, getBlockNeedMemory());
+  /* 強制的に戻るreturn命令を生成. 返り値はdefault_return */
+  genCodeValue(LVM_PUSH_IMMEDIATE, default_return);
   genCodeReturn();
+
+  /* 関数の終わりにバックパッチ */
+  backPatch(func_end_label);
 
 }
 
@@ -317,6 +331,7 @@ static void statement(void)
 {
 
   int tmp_label;          /* break, continue用の仮ラベル */
+  int plain_block_vars_label;   /* 普通のブロック内の変数個数のトップ移動の為のラベル */
 
   switch (token.kind) {
     case IF:
@@ -383,10 +398,10 @@ static void statement(void)
       break;
     case RETURN:
       /* return文のコンパイル */
-      /* 現在コンパイル中のブロックが関数ブロック
-       * ではない時はエラー */
-      if (getBlockKind() != FUNCTION_BLOCK) {
-        fprintf(stderr, "Error! This block isn't functon block, so cannot use return \n");
+      /* 現在コンパイル中のブロックが関数ブロックではない時はエラー */
+      if (getBlockKind() != FUNCTION_BLOCK
+          && getBlockKind() != TOPLEVEL) {
+        fprintf(stderr, "Error! This block isn't functon/toplevel block, so cannot use return \n");
         exit(1);
       }
 
@@ -405,16 +420,28 @@ static void statement(void)
     case LEFT_BRACE_STRING:
       /* ブロックのコンパイルへ */
       token = nextToken();
+      blockBegin(0, NORMAL_BLOCK);
+      plain_block_vars_label = genCodeMove(LVM_MOVE_STACK_P, 0);
       block();
+      /* ここでスタック必要量が分かるのでバックパッチ的に更新 */
+      changeMoveTop(plain_block_vars_label, getBlockNeedMemory());
+      /* このブロックで宣言定義した変数を破壊し, スタックトップをを元の位置に戻す */
+      if (getBlockNeedMemory() > 0) {
+        genCodeMove(LVM_MOVE_STACK_P, -getBlockNeedMemory());
+      }
+      blockEnd();
       break;
     default:
       /* それ以外は式からなる文と判定 */
       comma_expression();
-      /* 省略可能なセミコロン */
-      if (token.kind == SEMICOLON) {
-        token = nextToken();
-      }
+      /* その評価結果は捨てる */
+      genCodeCalc(LVM_POP);
       break;
+  }
+
+  /* 省略可能なセミコロンで文を区切る */
+  if (token.kind == SEMICOLON) {
+    token = nextToken();
   }
 
 }
@@ -490,6 +517,7 @@ static void if_statement(void)
            && token.kind != RIGHT_BRACE_STRING) {
       statement();
     }
+    token = checkGetToken2(token, RIGHT_BRACE, RIGHT_BRACE_STRING);
   }
 
   /* if文の終わりの飛び先にバックパッチ */
@@ -497,9 +525,6 @@ static void if_statement(void)
     backPatch(if_end_labels[if_i]);
   }
   MEM_free(if_end_labels);
-
-  /* 終わりの}を確認 */
-  token = checkGetToken2(token, RIGHT_BRACE, RIGHT_BRACE_STRING);
 
 }
 
@@ -512,13 +537,15 @@ static void switch_statement(void)
 
   /* ( -> expression -> ) -> { の並びを確認 */
   token = checkGetToken(token, LEFT_PARLEN);
-  expression();
+  expression();   /* 判定式のプッシュ */
   token = checkGetToken(token, RIGHT_PARLEN);
   token = checkGetToken2(token, LEFT_BRACE, LEFT_BRACE_STRING);
 
   /* case節の並び */
   while (token.kind == CASE) {
+    /* マッチした時のラベルのリセット */
     one_case_count = 0;
+    true_labels = NULL;
 
     /* caseを読んだら, expression, expression, ... -> : -> statement 
      * の順にコンパイル */
@@ -535,12 +562,13 @@ static void switch_statement(void)
     while (token.kind == COMMA) {
       genCodeCalc(LVM_DUPLICATE); /* 判定式を複製 */
       token = nextToken();
-      expression();               /* 一つのケースを生成 */
+      /* expression();                一つのケースを生成 */
+      term();
 
       genCodeCalc(LVM_EQUAL);     /* ケース判定 */
       one_case_count++;
       true_labels = (int *)MEM_realloc(true_labels, sizeof(int) * one_case_count);
-      true_labels[one_case_count-1] = genCodeJump(LVM_JUMP_IF_TRUE, 0);
+      true_labels[one_case_count-1] = genCodeJump(LVM_JUMP_IF_TRUE, 0);                         /* 真の場合は処理内容に */
     }
     token = checkGetToken(token, COLON);
 
@@ -554,7 +582,6 @@ static void switch_statement(void)
       backPatch(true_labels[onecase_i]);
     }
     MEM_free(true_labels);
-    true_labels = NULL;
 
     /* 処理内容の文リスト */
     while (token.kind != CASE
@@ -595,6 +622,9 @@ static void switch_statement(void)
   }
   MEM_free(endcase_labels);
 
+  /* 評価式の値がスタックに残るので, 取り除く */
+  genCodeCalc(LVM_POP);
+
 }
 
 /* for文のコンパイル */
@@ -602,12 +632,23 @@ static void for_statement(void)
 {
   /* ループ時の飛び先ラベルと, for文の終わりに飛び越すラベル */
   int for_loop_label, for_end_label;
+  /* 更新式の最初と最後に飛び越すラベル */
+  int update_begin_label, update_end_label;
+  /* for文内のスタック必要量の為のラベル */
+  int for_block_need_memory_label;
+
+
+  /* ブロックのスコープはここからスタート */
+  blockBegin(0, LOOP_BLOCK);
+  for_block_need_memory_label = genCodeMove(LVM_MOVE_STACK_P, 0);
+
   /* ( を確認 */
   token = checkGetToken(token, LEFT_PARLEN);
 
   /* 初期化式のコンパイル : 空でも可能 */
   if (token.kind != SEMICOLON) {
     comma_expression();
+    genCodeCalc(LVM_POP); /* 評価結果は捨てる */
   }
   /* セミコロンのチェック */
   token = checkGetToken(token, SEMICOLON);
@@ -621,46 +662,74 @@ static void for_statement(void)
   }
   /* セミコロンのチェック */
   token = checkGetToken(token, SEMICOLON);
+
   /* 偽ならば終わりに飛び越す */
   for_end_label  = genCodeJump(LVM_JUMP_IF_FALSE, 0);
+
+  /* 更新式は処理の後なので, 飛ばす */
+  update_end_label = genCodeJump(LVM_JUMP, 0);
+  /* 更新式開始への飛び先 */
+  update_begin_label = nextCode();
 
   /* 更新式のコンパイル : 空でも可能 */
   if (token.kind != RIGHT_PARLEN) {
     comma_expression();
+    genCodeCalc(LVM_POP); /* 評価結果は捨てる */
   }
+
+  /* 更新式の後は, ループの先頭に飛ぶ */
+  genCodeJump(LVM_JUMP, for_loop_label);
+  /* 更新式終了への飛び先はここ. */
+  backPatch(update_end_label);
+
   /* )のチェック */
   token = checkGetToken(token, RIGHT_PARLEN);
 
   /* 処理内容のコンパイル */
   token = checkGetToken2(token, LEFT_BRACE, LEFT_BRACE_STRING);
-  blockBegin(FIRST_LOCAL_ADDRESS, LOOP_BLOCK);
   block();
-  blockEnd();
 
-  /* ループの先頭に飛ぶ */
-  genCodeJump(LVM_JUMP, for_loop_label);
+  /* 処理後は, 更新式にジャンプ */
+  genCodeJump(LVM_JUMP, update_begin_label);
 
   /* for文の終わりにバックパッチ */
   backPatch(for_end_label);
 
-  /* break文のバックパッチ */
+  /* break文のバックパッチ : blockを考慮 */
   if (getBreakCount() > 0) {
     backPatchBreakLabels();
     MEM_free(break_labels[getBlockLevel()]);
+    break_labels[getBlockLevel()] = NULL;
   } 
-  /* continue文のバックパッチ */
+  /* continue文のバックパッチ : blockを考慮 */
   if (getContinueCount() > 0) {
     backPatchContinueLabels(for_loop_label);
     MEM_free(continue_labels[getBlockLevel()]);
+    continue_labels[getBlockLevel()] = NULL;
   }
+
+  /* スタック必要量を確定させる */
+  changeMoveTop(for_block_need_memory_label, getBlockNeedMemory());
+  /* このブロックで宣言定義した変数を破壊し, スタックトップをを元の位置に戻す */
+  if (getBlockNeedMemory() > 0) {
+    genCodeMove(LVM_MOVE_STACK_P, -getBlockNeedMemory());
+  }
+
+  /* ここでブロックを閉じる(break, continueのバックパッチのため) */
+  blockEnd();
 
 }
 
 /* while文のコンパイル */
 static void while_statement(void)
 {
+  /* ループと終わりのラベル */
   int while_loop_label, while_end_label;
+  /* while文で必要なスタックのラベル */
+  int while_block_need_memory_label;  
 
+  /* スタック必要量だけトップを動かす */
+  while_block_need_memory_label = genCodeMove(LVM_MOVE_STACK_P, 0);
   /* ループ先のラベルにセット */
   while_loop_label = nextCode();
   /* ( -> expression -> ) -> block の順にコンパイル */
@@ -672,9 +741,9 @@ static void while_statement(void)
 
   /* 処理内容のコンパイル */
   token = checkGetToken2(token, LEFT_BRACE, LEFT_BRACE_STRING);
-  blockBegin(FIRST_LOCAL_ADDRESS, LOOP_BLOCK);
+  blockBegin(0, LOOP_BLOCK);
+
   block();
-  blockEnd();
 
   /* ループの先頭にジャンプ */
   genCodeJump(LVM_JUMP, while_loop_label);
@@ -686,12 +755,24 @@ static void while_statement(void)
   if (getBreakCount() > 0) {
     backPatchBreakLabels();
     MEM_free(break_labels[getBlockLevel()]);
+    break_labels[getBlockLevel()] = NULL;
   } 
   /* continue文のバックパッチ */
   if (getContinueCount() > 0) {
     backPatchContinueLabels(while_loop_label);
     MEM_free(continue_labels[getBlockLevel()]);
+    continue_labels[getBlockLevel()] = NULL;
   }
+
+  /* while文で必要なスタック容量を確定 */
+  changeMoveTop(while_block_need_memory_label, getBlockNeedMemory());
+  /* このブロックで宣言定義した変数を破壊し, スタックトップをを元の位置に戻す */
+  if (getBlockNeedMemory() > 0) {
+    genCodeMove(LVM_MOVE_STACK_P, -getBlockNeedMemory());
+  }
+
+  /* ブロックを閉じる */
+  blockEnd();
 
 }
 
@@ -699,18 +780,21 @@ static void while_statement(void)
 static void do_while_statement(void)
 {
   int do_while_loop_label;
+  int do_while_block_need_memory_label;
   /* block -> while -> ( -> expression -> ) 
    * の順にコンパイル */
 
-  /* ループの先頭のラベルをセット */
-  do_while_loop_label = nextCode();
 
   /* 処理内容のコンパイル */
   token = checkGetToken2(token, LEFT_BRACE, LEFT_BRACE_STRING);
-  blockBegin(FIRST_LOCAL_ADDRESS, LOOP_BLOCK);
-  block();
-  blockEnd();
+  blockBegin(0, LOOP_BLOCK);
+  do_while_block_need_memory_label = genCodeMove(LVM_MOVE_STACK_P, 0);
 
+  /* ループの先頭のラベルをセット */
+  do_while_loop_label = nextCode();
+  block();
+
+  /* 条件式のコンパイル */
   token = checkGetToken(token, WHILE);
   token = checkGetToken(token, LEFT_PARLEN);
   expression();
@@ -723,12 +807,24 @@ static void do_while_statement(void)
   if (getBreakCount() > 0) {
     backPatchBreakLabels();
     MEM_free(break_labels[getBlockLevel()]);
+    break_labels[getBlockLevel()] = NULL;
   } 
   /* continue文のバックパッチ */
   if (getContinueCount() > 0) {
     backPatchContinueLabels(do_while_loop_label);
     MEM_free(continue_labels[getBlockLevel()]);
+    continue_labels[getBlockLevel()] = NULL;
   }
+
+  /* この文で必要なスタック容量 */
+  changeMoveTop(do_while_block_need_memory_label, getBlockNeedMemory());
+  /* このブロックで宣言/定義した変数を破壊し, スタックトップをを元の位置に戻す */
+  if (getBlockNeedMemory() > 0) {
+    genCodeMove(LVM_MOVE_STACK_P, -getBlockNeedMemory());
+  }
+
+  /* ブロックを閉じる */
+  blockEnd();
 
 }
 
@@ -738,18 +834,14 @@ static void comma_expression(void)
 { 
   /* まず式を読む */
   expression();
-  genCodeCalc(LVM_POP); 
+
   /* , expressionの並び */
   while (token.kind == COMMA) {
-    token = nextToken();
-    expression();
-    if (token.kind == COMMA) {
     /* 一番右の式の値以外は捨てる
      * => 評価値は一番右の式のみ */
-      genCodeCalc(LVM_POP); 
-    } else {
-      break;
-    }
+    genCodeCalc(LVM_POP);
+    token = nextToken();
+    expression();
   }
 }
 
@@ -758,7 +850,9 @@ static void expression(void)
 {
   /* インクリメント・デクリメントカウントのリセット */
   increment_table_count = 0;
+  increment_table_list = NULL;
   decrement_table_count = 0;
+  decrement_table_list = NULL;
   int inc_dec_i;
 
   /* 演算子の種類 */
@@ -785,7 +879,9 @@ static void expression(void)
       || token.kind == MOD_ASSIGN) {
     op_kind = token.kind;
 
-    /* 一つ前のトークン（左辺）を取得する */
+    /* 左辺値がプッシュされているので, 取り除く */
+    genCodeCalc(LVM_POP);
+    /* 一つ前のトークン（左辺）を取得する TODO:反則 */
     id_token = prevToken();
 
     /* 左辺が識別子でない => エラー */
@@ -1084,7 +1180,7 @@ static void unary_expression(void)
       genCodeCalc(LVM_LOGICAL_NOT);
       break;
     case OTHERS:  /* FALLTHRU */
-    default:  /* 何もなかった => 何もしない */
+    default:      /* 何もなかった => 何もしない */
       break;
   }
 
@@ -1114,7 +1210,8 @@ static void term(void)
         case VAR_IDENTIFIER:    /* FALLTHRU */
         case PARAM_IDENTIFIER:
           token = nextToken();
-          /* テーブルからプッシュ */
+
+          /* 変数値をスタックの他の場所からプッシュ */
           genCodeTable(LVM_PUSH_VALUE, table_index);
 
           /* 変数の場合, インクリメント/デクリメントを見たら
@@ -1171,7 +1268,7 @@ static void term(void)
 
           /* パラメタ数の一致を確認 */
           if (getNumParams(table_index) != param_count) {
-            fprintf(stderr, "Error! Function parameters unmatch \n");
+            fprintf(stderr, "Error! Function parameter mismatched \n");
             exit(1);
           }
 
@@ -1179,6 +1276,9 @@ static void term(void)
            * funcid のように, ()を省略した呼び出しも可能 */
           genCodeTable(LVM_INVOKE, table_index);
           break;
+        default:
+          fprintf(stderr, "Error in identifier in term \n");
+          exit(EXIT_FAILURE);
       }
       break;
       /* リテラル : その場でコード生成 */
@@ -1237,7 +1337,7 @@ static void addBreakLabel(int current_pc)
   /* 現在のブロックレベルを取得 */
   int block_level = getBlockLevel();
   /* 個数と領域を増やし, pcを登録 */
-  int count = incContinueCount();
+  int count = incBreakCount();
   break_labels[block_level] = (int *)MEM_realloc(break_labels[block_level], sizeof(int) * count);
   break_labels[block_level][count-1] = current_pc;
 }
