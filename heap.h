@@ -6,6 +6,7 @@
 
 #include "MEM.h"
 #include "share.h"
+#include "table.h"
 #include "execute.h"
 
 /* 文字列srcのヒープ領域への割り当て. 文字列はヒープへとディープコピーされる */

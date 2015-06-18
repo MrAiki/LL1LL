@@ -1,7 +1,8 @@
 #ifndef SHARE_H_INCLUDED
 #define SHARE_H_INCLUDED
 
-#define FIRST_LOCAL_ADDRESS (2) /* 各ブロックの最初のローカル変数のアドレス:0にはディスプレイが指すアドレス, 1には戻りアドレスが入る */
+/* 各ブロックの最初のローカル変数のアドレス:0にはディスプレイが指すアドレス, 1には戻りアドレスが入る */
+#define FIRST_LOCAL_ADDRESS    (2) 
 /* 一回のfgetsで取得する最大文字数 */
 #define MAX_LEN_SOURCE_LINE    (200)
 /* 識別子の最大長 */
@@ -11,9 +12,11 @@
 /* 文字列リテラルの最大文字数 */
 #define MAX_LEN_STRING_LITERAL (50)
 /* エラー時の文字列バッファの長さ */
-#define LINE_BUF_SIZE (100)
+#define LINE_BUF_SIZE          (100)
 /* ブロックの最大深さ FIXME:こっちも動的確保できるように修正 */
-#define MAX_BLOCK_LEVEL (20)   
+#define MAX_BLOCK_LEVEL        (20)   
+/* コードの最大長 FIXME:長さは可変にしよう */
+#define MAX_CODE_SIZE          (2000)
 
 /* 文字列型を判定するマクロ */
 #define is_string(value) \
@@ -34,6 +37,7 @@ typedef enum {
   LL1LL_DOUBLE_TYPE,  /* 倍精度実数型 */
   LL1LL_BOOLEAN_TYPE, /* 論理型 */
   LL1LL_OBJECT_TYPE,  /* 参照型(配列や文字列など, ポインタを介するもの) */
+  LL1LL_STREAM_TYPE,  /* TODO:ファイルポインタを使えるようにする */
   LL1LL_NULL_TYPE,    /* NULL型 */
 } LL1LL_TypeKind;
 

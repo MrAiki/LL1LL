@@ -1,4 +1,4 @@
-#include "lexical.h"
+#include "compile.h"
 
 int main(void)
 {

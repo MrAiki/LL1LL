@@ -8,9 +8,6 @@
 #include "share.h"
 #include "table.h"
 
-/* FIXME:長さは可変にしよう */
-#define MAX_CODE_SIZE (2000) /* コードの最大長 */
-
 /* 命令語の種類 */
 typedef enum {
   /* スタック操作系 */
@@ -41,8 +38,8 @@ typedef enum {
   LVM_MOD,              /* (一つ下)=(一つ下)%(トップ) */
   LVM_POW,              /* (一つ下)=(一つ下)**(トップ) (累乗) */
   /* 論理演算 */
-  LVM_LOGICAL_AND,
-  LVM_LOGICAL_OR,
+  LVM_LOGICAL_AND,      /* (一つ下)=(一つ下)&&(トップ) */
+  LVM_LOGICAL_OR,       /* (一つ下)=(一つ下)||(トップ) */
   /* 比較 */
   LVM_EQUAL,            /* (一つ下) == (トップ) : トップと一つ下の値が等しいかチェックし, 等しければ, 一つ下にTRUE, 等しくなければFALSEをセット */
   LVM_NOT_EQUAL,        /* (一つ下) != (トップ) */
