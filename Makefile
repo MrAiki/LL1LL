@@ -4,12 +4,6 @@ GCC=gcc
 clean:
 	rm *.o
 
-compile_test: compile_test.o compile.o lexical.o error.o error_message.o
-	$(GCC) $(CFLAGS) compile.o lexical.o compile_test.o error.o error_message.o -o compile_test
-
-generate_test: generate_test.o compile.o lexical.o generate.o table.o heap.o memory.o error.o error_message.o
-	$(GCC) $(CFLAGS) $^ -o $@
-
 execute_test: execute_test.o compile.o lexical.o generate.o table.o heap.o execute.o memory.o error.o error_message.o
 	$(GCC) $(CFLAGS) $^ -o $@
 
