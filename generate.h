@@ -47,6 +47,9 @@ typedef enum {
   LVM_GREATER_EQUAL,    /* (一つ下) >= (トップ) */
   LVM_LESSTHAN,         /* (一つ下)  < (トップ) */
   LVM_LESSTHAN_EQUAL,   /* (一つ下) <= (トップ) */
+  /* ストリーム操作系 */
+  LVM_POP_TO_STREAM,       /* (一つ下(stream)) << (トップ) */
+  LVM_PUSH_FROM_STREAM,      /* TODO:動作未定義 */
 } LVM_OpCode;
 
 /* 命令の構造体 */
@@ -73,7 +76,7 @@ void changeMoveTop(int pc, int move_top);             /* pcのトップ移動量
 int nextCode(void);                                   /* 次のプログラムカウンタを返す */
 
 int getCodeSize(void);                                /* 現在のコードサイズを得る */
-LVM_Instruction *get_instruction(void);               /* 命令列のポインタを得る */
+LVM_Instruction *getInstruction(void);               /* 命令列のポインタを得る */
 
 /* デバッグ用・pc番目の命令の表示 */
 void printCode(int pc);

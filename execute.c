@@ -14,17 +14,20 @@ static LL1LL_Value do_calculate(LL1LL_Value left,
 static LL1LL_Value do_compare(LL1LL_Value left, 
                               LL1LL_Value right,
                               LVM_OpCode);
+/* ストリームプッシュのサブルーチン */
+static LL1LL_Value do_put_stream(LL1LL_Value left,
+                                 LL1LL_Value right);
 /* スタックのstack_pの要素を印字 */
 static void printStackElement(int stack_p);
 
 /* スタックトップを得る */
-int get_stack_top(void)
+int getStackTop(void)
 {
   return top;
 }
 
 /* スタックを指すポインタを得る */
-LL1LL_Value *get_stack_pointer(void)
+LL1LL_Value *getStackPointer(void)
 {
   return &(stack[0]);
 }
@@ -35,7 +38,7 @@ void execute(void)
   int pc;                                     /* プログラムカウンタ */
   int temp_level;                             /* ブロックレベルと */
   LL1LL_Value temp_value;                     /* 値のテンポラリ */
-  LVM_Instruction *code = get_instruction();  /* 命令列 */
+  LVM_Instruction *code = getInstruction();   /* 命令列 */
   int code_size         = getCodeSize();      /* 命令列のサイズ */
   LVM_Instruction inst;                       /* 現在の命令 */
   /* int display[MAX_BLOCK_LEVEL] = {0};      ディスプレイの配列:各ブロックの先頭アドレス => tableに移動 */
@@ -70,15 +73,11 @@ void execute(void)
         stack[top++] 
           = stack[getDisplayAt(inst.u.address.block_level)
                     + inst.u.address.address];
-          /* = stack[display[inst.u.address.block_level] 
-                    + inst.u.address.address]; */
         break;
       case LVM_POP_VARIABLE:
         /* 変数のポップ : アドレスを指定してポップ */
         stack[getDisplayAt(inst.u.address.block_level)
                     + inst.u.address.address] = stack[--top];
-        /* stack[display[inst.u.address.block_level] 
-                + inst.u.address.address] = stack[--top]; */
         break;
       case LVM_POP:
         /* 単純にトップを一つずらすだけ */
@@ -160,15 +159,25 @@ void execute(void)
         stack[top-1] 
           = do_compare(stack[top-1], stack[top], inst.opcode);
         break;
+        /* ストリームにポップ */
+      case LVM_POP_TO_STREAM:
+        top--;
+        stack[top-1]
+          = do_put_stream(stack[top-1], stack[top]);
+        break;
+        /* ストリームからプッシュ */
+      case LVM_PUSH_FROM_STREAM:
+        /* TODO:これは考察すべき. どの関数を使うか. */
+        break;
       default:
         fprintf(stderr, "Error! Invailed opecode \n");
         exit(EXIT_FAILURE);
     }
 
     /* デバッグ用, スタックの状態を表示 */
-    printStack();
-    printf("pc : %4d ", pc);
-    printCode(pc);
+       printStack();
+       printf("pc : %4d ", pc);
+       printCode(pc);
   } while (pc <= code_size);
   /* } while (pc != 0); */
 
@@ -246,8 +255,10 @@ static LL1LL_Value
 do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
 {
 
-  LL1LL_Value ret_value;  /* 結果のテンポラリ */
-  ret_value.type = left.type; /* 返す型はとりあえず左辺に */
+  char str_buf[RUNTIME_STR_BUF_SIZE]; /* 文字列バッファ */
+  LL1LL_Value ret_value;              /* 結果のテンポラリ */
+  ret_value.type = left.type;         /* 返す型はとりあえず左辺に合わせる */
+
   switch (code) {
     case LVM_ADD:
       /* 加算 */
@@ -279,24 +290,38 @@ do_calculate(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
       } else if (is_string(left)
                  && right.type == LL1LL_INT_TYPE) {
         /* 左辺がstring, 右辺がint */
-        sprintf(get_string_value(left), "%s%d",
-                  get_string_value(left), right.u.int_value);
-        /* 参照も同時に渡すので, 多分大丈夫 */
-        ret_value = left;
+        /* 数字を文字列に変換 */
+        sprintf(str_buf, "%d", right.u.int_value);
+        /* 文字列を連結し,結果のオブジェクト参照を取得 */
+        ret_value.u.object
+          = cat_string(get_string_value(left), str_buf);
       } else if (is_string(left)
                  && right.type == LL1LL_DOUBLE_TYPE) {
         /* 左辺がstring, 右辺がdouble */
-        sprintf(get_string_value(left), "%s%f",
-                  get_string_value(left), right.u.double_value);
+        /* 数字を文字列に変換 */
+        sprintf(str_buf, "%f", right.u.double_value);
+        /* 文字列を連結 */
+        left.u.object
+          = cat_string(get_string_value(left), str_buf);
         ret_value = left;
       } else if (is_string(left)
                  && right.type == LL1LL_BOOLEAN_TYPE) {
         /* 左辺がstring, 右辺がboolean */
         if (right.u.boolean_value == LL1LL_TRUE) {
-          strcat(get_string_value(left), "true");
+          strcat(str_buf, "true");
         } else {
-          strcat(get_string_value(left), "false");
+          strcpy(str_buf, "false");
         }
+        /* 文字列を連結 */
+        left.u.object
+          = cat_string(get_string_value(left), str_buf);
+        ret_value = left;
+      } else if (is_string(left) && is_string(right)) {
+        /* 左辺がstring, 右辺がstring */
+        /* 文字列を連結 */
+        left.u.object
+          = cat_string(get_string_value(left), get_string_value(right));
+        /* 参照も同時に渡すので, 多分大丈夫 */
         ret_value = left;
       } else {
         /* 加算の型エラー */
@@ -813,6 +838,34 @@ do_compare(LL1LL_Value left, LL1LL_Value right, LVM_OpCode code)
 
 }
 
+/* ストリームへの出力 */
+static LL1LL_Value do_put_stream(LL1LL_Value left, LL1LL_Value right)
+{
+  /* 返り値は, 書き込みステータスを取る */
+  LL1LL_Value ret_value;
+
+  /* 左辺がストリーム型で無いならばエラー */
+  if (left.type != LL1LL_STREAM_TYPE) {
+    fprintf(stderr, "Error! left hand of << isn't streamor string type \n");
+    exit(EXIT_FAILURE);
+  }
+
+  /* 右辺が文字列でないならばエラー */
+  if (!is_string(right)) {
+    fprintf(stderr, "Error! right hand of << isn't string type \n");
+    exit(EXIT_FAILURE);
+  }
+
+  /* fputsを使って書き込む.
+   * TODO:fputsでいいのか? -> 今のところは良さそう */
+  ret_value.type = LL1LL_INT_TYPE;
+  /* 結果はfputs(書き込み)の戻り値 */
+  ret_value.u.int_value
+    = fputs(get_string_value(right), left.u.stream_value);
+
+  return ret_value;
+}
+
 /* スタックの要素の印字 */
 static void printStackElement(int stack_p)
 {
@@ -833,6 +886,17 @@ static void printStackElement(int stack_p)
         printf("%4d : boolean_value : true", stack_p);
       } else {
         printf("%4d : boolean_value : false", stack_p);
+      }
+      break;
+    case LL1LL_STREAM_TYPE:
+      if (val.u.stream_value == stdin) {
+        printf("%4d : stream_value : stdin", stack_p);
+      } else if (val.u.stream_value == stdout) {
+        printf("%4d : stream_value : stdout", stack_p);
+      } else if (val.u.stream_value == stderr) {
+        printf("%4d : stream_value : stderr", stack_p);
+      } else {
+        printf("%4d : stream_value(file pointer) : %p", stack_p, val.u.stream_value);
       }
       break;
     case LL1LL_OBJECT_TYPE:
@@ -863,11 +927,8 @@ void printStack(void)
   /* トップから下まで順に印字 */
   puts("---------------------------");
   /* top-1 */
-  for (i = 10; i >= 0; i--) {
+  for (i = top-1; i >= 0; i--) {
     printStackElement(i);
-    if (i == top) {
-      printf("  <- top");
-    }
     printf("\n");
     puts("---------------------------");
   }

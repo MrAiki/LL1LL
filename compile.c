@@ -21,6 +21,7 @@ static void while_statement(void);        /* while文のコンパイル */
 static void do_while_statement(void);     /* do while文のコンパイル */
 static void block(void);                  /* ブロックのコンパイル */
 static void function_block(int table_index);   /* 関数ブロックのコンパイル */
+static void stream_expression(void);      /* ストリーム式のコンパイル */
 static void comma_expression(void);       /* コンマ式のコンパイル */
 static void expression(void);             /* 式のコンパイル */
 static void logical_or_expression(void);  /* 論理OR式のコンパイル */
@@ -39,16 +40,17 @@ static void addContinueLabel(int current_pc);     /* continueラベルの追加 
 static void backPatchBreakLabels(void);           /* breakラベルの一括バックパッチ */
 static void backPatchContinueLabels(int loop_pc); /* continueラベルの一括バックパッチ */
 
-
 /* コンパイル */
 int compile(void)
 {
-  printf("Start compilation. \n");
+  int toplevel_need_memory_label;      /* トップレベルで必要なメモリ量の為のラベル */
+  /* printf("Start compilation. \n"); */
   initSource();                        /* 字句解析の準備 */
   token = nextToken();                 /* 最初の先読みトークンを読む */
   blockBegin(FIRST_LOCAL_ADDRESS, TOPLEVEL);  /* スタック型記憶域の初期化も兼ねてブロックをセット */
-  genCodeMove(LVM_MOVE_STACK_P, getBlockNeedMemory());  /* 復帰情報の分を含めてトップを移動 */
+  toplevel_need_memory_label = genCodeMove(LVM_MOVE_STACK_P, 0);  /* 復帰情報の分を含めてトップを移動 */
   toplevel();                          /* トップレベルからコンパイル */
+  changeMoveTop(toplevel_need_memory_label, getBlockNeedMemory());                            /* トップレベルで必要なスタック容量 */
   blockEnd();                                 /* ブロックの終了 */
 
   return 0;   /* TODO: エラー個数を返すようにする */
@@ -154,7 +156,7 @@ static void constDecl(void)
       case STRING_LITERAL:    /* 文字列リテラル */
         value_temp.type           = LL1LL_OBJECT_TYPE;
         value_temp.u.object->type = STRING_OBJECT;
-        value_temp.u.object       = alloc_string(token.u.string_value, LL1LL_TRUE);
+        value_temp.u.object       = alloc_string(token.u.string_value, LL1LL_FALSE);  /* リテラルではないためLL1LL_FALSE */
         token = nextToken();
         break;
       case TRUE_LITERAL:      /* 論理値リテラル */
@@ -433,7 +435,7 @@ static void statement(void)
       break;
     default:
       /* それ以外は式からなる文と判定 */
-      comma_expression();
+      stream_expression();
       /* その評価結果は捨てる */
       genCodeCalc(LVM_POP);
       break;
@@ -828,6 +830,29 @@ static void do_while_statement(void)
 
 }
 
+/* ストリーム式のコンパイル */
+static void stream_expression(void)
+{
+  /* まずコンマ式を読む
+   * (左辺はストリーム型である必要あり) */
+  comma_expression();
+
+  /* "<<"or">>" comma_expression */
+    switch (token.kind) {
+      case PUT_TO_STREAM:
+        /* ストリームへのプット */
+        token = nextToken();
+        comma_expression();
+        genCodeCalc(LVM_POP_TO_STREAM);
+        break;
+      case GET_FROM_STREAM:
+        break;
+      default:
+        break;
+  }
+
+}
+
 /* コンマ式のコンパイル
  * コンマ式も式だが, 仮引数との兼ね合いが難しいので分割 */
 static void comma_expression(void)
@@ -881,7 +906,7 @@ static void expression(void)
 
     /* 左辺値がプッシュされているので, 取り除く */
     genCodeCalc(LVM_POP);
-    /* 一つ前のトークン（左辺）を取得する TODO:反則 */
+    /* 一つ前のトークン（左辺）を取得する. 反則. */
     id_token = prevToken();
 
     /* 左辺が識別子でない => エラー */
@@ -1317,6 +1342,25 @@ static void term(void)
       token = nextToken();
       comma_expression();
       token = checkGetToken(token, RIGHT_PARLEN);
+      break;
+      /* ストリームのリテラル */
+    case STDIN:
+      temp_value.type           = LL1LL_STREAM_TYPE;
+      temp_value.u.stream_value = stdin;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
+      break;
+    case STDOUT:
+      temp_value.type           = LL1LL_STREAM_TYPE;
+      temp_value.u.stream_value = stdout;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
+      break;
+    case STDERR:
+      temp_value.type           = LL1LL_STREAM_TYPE;
+      temp_value.u.stream_value = stderr;
+      genCodeValue(LVM_PUSH_IMMEDIATE, temp_value);
+      token = nextToken();
       break;
       /* 不正なトークン */
     case OTHERS:

@@ -88,6 +88,7 @@ typedef struct LL1LL_Value_tag {
     double        double_value;   /* 倍精度実数 */
     LL1LL_Boolean boolean_value;  /* 論理値 */
     LL1LL_Object  *object;        /* オブジェクト参照 */
+    FILE          *stream_value;  /* ストリーム */
   } u;
 } LL1LL_Value;
 

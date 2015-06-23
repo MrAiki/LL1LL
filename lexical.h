@@ -9,9 +9,6 @@
 #include "share.h"
 #include "error.h"
 
-/* 入力ストリームの実体 */
-FILE* input_source;
-
 /* トークン（若しくは, 文字）の種類 */
 typedef enum token_kind_tag {
   VAR = 0, CONST, FUNC,                     /* 変数/定数/関数定義 var, const, func */
@@ -27,6 +24,7 @@ typedef enum token_kind_tag {
   LEFT_BRACE_STRING, RIGHT_BRACE_STRING,    /* "begin", "end" それぞれ '{', '}'と等価 */
   LOGICAL_OR_STRING, LOGICAL_AND_STRING,    /* "or", "and" それぞれ "||", "&&"と等価*/
   LOGICAL_NOT_STRING,                       /* "not" '!'と等価 */
+  STDIN, STDOUT, STDERR,                    /* "stdin", "stdout", "stderr" */
   END_OF_KEYWORD,                           /* ここまで予約語. 番兵に使う */
   ASSIGN, ADD_ASSIGN, SUB_ASSIGN,           /* 代入/代入演算子 =, +=, -=, */
   MUL_ASSIGN, DIV_ASSIGN, MOD_ASSIGN,       /* *=, /=, %= */
@@ -42,6 +40,7 @@ typedef enum token_kind_tag {
   PLUS, MINUS, MUL, DIV, MOD, LOGICAL_NOT,  /* '+', '-', '*', '/', '%', '!' */
   POWER,                                    /* "**" */
   INCREMENT, DECREMENT,                     /* "++", "--" */
+  PUT_TO_STREAM, GET_FROM_STREAM,           /* "<<", ">>" */
   DOUBLE_QUOTE,                             /* 文字列境界 '"' */
   END_OF_KEYSYMBOL,                         /* ここまで予約シンボル. 番兵に使う */
   IDENTIFIER,                               /* 識別子文字列 */

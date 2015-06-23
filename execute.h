@@ -12,9 +12,10 @@
 
 /* FIXME:こいつも可変にしましょう */
 #define MAX_EXE_STACK_SIZE (3000)     /* 実行時スタックの最大サイズ */
+#define RUNTIME_STR_BUF_SIZE (200)    /* 実行時に確保しておく文字列バッファの長さ */
 
-int get_stack_top(void);              /* 現在のスタックトップを得る */
-LL1LL_Value *get_stack_pointer(void); /* 現在のスタックを指すポインタを得る */
+int getStackTop(void);              /* 現在のスタックトップを得る */
+LL1LL_Value *getStackPointer(void); /* 現在のスタックを指すポインタを得る */
 
 void execute(void);                   /* 実行 */
 

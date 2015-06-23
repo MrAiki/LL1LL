@@ -2,9 +2,9 @@
 
 static char source_line_string[MAX_LEN_SOURCE_LINE];  /* fgetsで取得した, 現在行の文字列バッファ */
 static int line_index;  /* 現在行の文字インデックス */
+FILE* input_source;     /* 入力ファイルポインタ */
 int line_number;        /* 現在の行数 */
 static char nextchar;   /* 次の文字が入っているバッファ */
-
 static Token prev_token;    /* 一つ前のトークン */
 static Token current_token; /* 今読んでいるトークン */
 
@@ -29,6 +29,7 @@ static Keyword_table_entry keyword_table[] = {
   {"begin", LEFT_BRACE_STRING}, {"end", RIGHT_BRACE_STRING},
   {"or", LOGICAL_OR_STRING}, {"and", LOGICAL_AND_STRING},
   {"not", LOGICAL_NOT_STRING},
+  {"stdin", STDIN}, {"stdout", STDOUT}, {"stderr", STDERR},
   {"$dummy_end_of_keyword", END_OF_KEYWORD},
   {"=", ASSIGN}, {"+=", ADD_ASSIGN}, {"-=", SUB_ASSIGN},
   {"*=", MUL_ASSIGN}, {"/=", DIV_ASSIGN}, {"%=", MOD_ASSIGN},
@@ -44,6 +45,7 @@ static Keyword_table_entry keyword_table[] = {
   {"+", PLUS}, {"-", MINUS}, {"*", MUL}, {"/", DIV}, {"%", MOD}, {"!", LOGICAL_NOT},
   {"**", POWER},
   {"++", INCREMENT}, {"--", DECREMENT},
+  {"<<", PUT_TO_STREAM}, {">>", GET_FROM_STREAM},
   {"\"", DOUBLE_QUOTE},
   {"$dummy_end_of_keysymbol", END_OF_KEYSYMBOL},
 };
@@ -121,7 +123,7 @@ static char nextChar(void)
     if (fgets(source_line_string, MAX_LEN_SOURCE_LINE, input_source) != NULL) {
       line_index = 0; /* インデックスは0に */
     } else {
-      fprintf(stderr, "End of source file\n");
+      /* fprintf(stderr, "End of source file\n"); */
       return EOF;
     }
   }
@@ -414,6 +416,10 @@ static Token st_nextToken(void)
           nextchar = nextChar();
           temp_token.kind = GREATER_EQUAL;
           break;
+        case '>' : /* >> */
+          nextchar = nextChar();
+          temp_token.kind = GET_FROM_STREAM;
+          break;
         default:  /* '>' */
           temp_token.kind = GREATER;
           break;
@@ -427,6 +433,10 @@ static Token st_nextToken(void)
           nextchar = nextChar();
           temp_token.kind = LESSTHAN_EQUAL;
           break;
+        case '<' :  /* "<<" */
+          nextchar = nextChar();
+          temp_token.kind = PUT_TO_STREAM;
+          break;
         default:
           temp_token.kind = LESSTHAN;
           break;
@@ -438,13 +448,50 @@ static Token st_nextToken(void)
       /* 文字列の読み込み */
       while (nextchar != '"') {
         if (token_string_index < MAX_LEN_STRING_LITERAL) {
-          string_buf[token_string_index++] = nextchar;
-          /* '\'を読んだときは, 次の文字を強制的に読み込む */
+          /* エスケープ文字の生成 */
           if (nextchar == '\\') {
             nextchar = nextChar();
-            continue;
+            switch (nextchar) {
+              case 'a': /* ベル文字'\a' */
+                string_buf[token_string_index++] = '\a';
+                break;
+              case 'b': /* バックスペース'\b' */
+                string_buf[token_string_index++] = '\b';
+                break;
+              case 'f': /* ページ送り'\f' */
+                string_buf[token_string_index++] = '\f';
+                break;
+              case 'n': /* 改行'\n' */
+                string_buf[token_string_index++] = '\n';
+                break;
+              case 'r': /* ラインフィード'\r' */
+                string_buf[token_string_index++] = '\r';
+                break;
+              case 't': /* 水平タブ */
+                string_buf[token_string_index++] = '\t';
+                break;
+              case 'v': /* 垂直タブ */
+                string_buf[token_string_index++] = '\v';
+                break;
+              case '\\': /* \そのもの */
+                string_buf[token_string_index++] = '\\';
+                break;
+              case '\'': /* 'そのもの */
+                string_buf[token_string_index++] = '\'';
+                break;
+              case '"': /* "そのもの */
+                string_buf[token_string_index++] = '\"';
+                break;
+              default:
+                break;
+            }
+            nextchar = nextChar();
+          } else {
+            /* 普通に読む */
+            string_buf[token_string_index++] = nextchar;
+            nextchar = nextChar();
           }
-          nextchar = nextChar();
+
         }
       }
 
@@ -454,7 +501,7 @@ static Token st_nextToken(void)
       /* 長すぎる文字列を見た時は, 最早正常処理ができないので終了 */
       if (token_string_index >= MAX_LEN_STRING_LITERAL) {
         fprintf(stderr, "Too long string literal. \n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
 
       /* 得られた文字列の末尾にナル文字を追加 */

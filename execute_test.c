@@ -5,7 +5,7 @@ int main(void)
 
   if (openSource("test_easy.ll")) {
     compile();
-    printCodeList();
+    /* printCodeList(); */
     execute();
   }
 

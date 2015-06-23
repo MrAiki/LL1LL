@@ -72,6 +72,32 @@ LL1LL_Object* alloc_string(char *src, LL1LL_Boolean is_literal)
   return new_entry;
 }
 
+/* 引数の文字列をstr1str2で連結し, 結果をヒープに登録し, オブジェクト参照ポインタを返す */
+LL1LL_Object* cat_string(char *str1, char *str2)
+{
+  char* str_result;    /* 連結結果の文字列 */
+  int str_len;         /* 文字列長 */
+  /* 領域確保 */
+  LL1LL_Object *new_entry       = (LL1LL_Object *)MEM_malloc(sizeof(LL1LL_Object));
+  /* オブジェクトの種類と, マークの初期化 */
+  new_entry->type               = STRING_OBJECT;
+  new_entry->marked             = LL1LL_FALSE;
+
+  /* 完成後の文字列長を取得し, 結果の文字列を構成 */
+  str_len    = strlen(str1) + strlen(str2) + 1;
+  str_result = (char *)MEM_malloc(sizeof(char) * str_len);
+  strcat(str_result, str1);
+  strcat(str_result, str2);
+
+  /* 結果をヒープに登録 */
+  new_entry->u.str.string_value = str_result;
+  new_entry->u.str.is_literal   = LL1LL_FALSE;
+  /* ヒープ管理リストへ追加 */
+  addHeapEntry(new_entry);
+
+  return new_entry;
+}
+
 /* サイズsizeの配列をヒープ領域へ割り当てる. 要素の初期化は特に行わず, 呼んだ側で頑張ってもらう */
 LL1LL_Object* alloc_array(size_t size)
 {
@@ -158,8 +184,8 @@ static void gc_mark(void)
 {
   int i;
   /* スタックトップと, スタックを指すポインタを取得 */
-  int stack_top        = get_stack_top();  
-  LL1LL_Value *stack_p = get_stack_pointer(); 
+  int stack_top        = getStackTop();  
+  LL1LL_Value *stack_p = getStackPointer(); 
   LL1LL_Object *pos;
 
   /* 全マークをリセット */
@@ -173,7 +199,7 @@ static void gc_mark(void)
       continue;
     } else {
       /* マークを付ける */
-      if (stack_p[i].u.object->type == STRING_OBJECT) {
+      if (is_string(stack_p[i])) {
         stack_p[i].u.object->marked = LL1LL_TRUE;
       } else {
         /* should be ARRAY_OBJECT here */
@@ -221,7 +247,7 @@ static void gc_sweep(void)
 }
 
 /* GC(ガベージコレクション)を行う */
-void gaberage_collect(void)
+void startGC(void)
 {
   gc_mark();  /* マーク */
   gc_sweep(); /* スイープ */

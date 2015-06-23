@@ -8,6 +8,7 @@
 #include <assert.h>
 
 #include "share.h"
+#include "lexical.h"
 
 /* エラーの種類 */
 typedef enum {

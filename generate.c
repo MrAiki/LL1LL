@@ -113,7 +113,7 @@ int getCodeSize(void)
 }
 
 /* 命令列の最初の要素へのポインタを得る */
-LVM_Instruction *get_instruction(void)
+LVM_Instruction *getInstruction(void)
 {
   return &(code[0]);
 }
@@ -255,6 +255,14 @@ void printCode(int pc)
       printf("lessthan_equal");
       oprand_kind = OPRAND_VOID;
       break;
+    case LVM_POP_TO_STREAM:
+      printf("pop_to_stream");
+      oprand_kind = OPRAND_VOID;
+      break;
+    case LVM_PUSH_FROM_STREAM:
+      printf("push_from_stream");
+      oprand_kind = OPRAND_VOID;
+      break;
     default:
       fprintf(stderr, "Error! mismatch opcode name in print_code\n");
       exit(1);
@@ -289,8 +297,21 @@ void printCode(int pc)
               /* 配列:これから... */
               return;
           }
+        case LL1LL_STREAM_TYPE:
+          if (code[pc].u.value.u.stream_value == stdin) {
+            printf(", stream:stdin\n");
+          } else if (code[pc].u.value.u.stream_value == stdout) {
+            printf(", stream:stdout\n");
+          } else if (code[pc].u.value.u.stream_value == stderr) {
+            printf(", stream:stderr\n");
+          } else {
+            printf(", stream(file pointer):%p\n", code[pc].u.value.u.stream_value);
+          }
+          return;
         case LL1LL_NULL_TYPE:
           printf(", null\n");
+          return;
+        default:
           return;
       }
     case OPRAND_RELADDR:

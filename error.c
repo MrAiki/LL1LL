@@ -6,9 +6,10 @@ format_message(MessageFormat *format,
                char          *str,
                va_list       ap)
 {
+  /* 
   int i;
   char buf[LINE_BUF_SIZE];
-
+  */
 }
 
 /* コンパイルエラー:エラー出力 */

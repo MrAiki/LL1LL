@@ -14,6 +14,6 @@
 
 extern int line_number; /* 現在コンパイル中の行数 */
 
-int compile(void);
+int compile(void);      /* トップレベルからのコンパイルを実行 */
 
 #endif /* COMPILE_H_INCLUDED */

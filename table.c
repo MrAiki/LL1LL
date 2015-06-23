@@ -197,15 +197,15 @@ void blockBegin(int first_address, BlockKind kind)
   if (kind != FUNCTION_BLOCK) {
     display[current_block_level+1] = display[current_block_level] + local_addr;
   } 
-  /* ラベルの個数を初期化 */
-  break_label_count[current_block_level]    = 0;
-  continue_label_count[current_block_level] = 0;
 
   /* 新しいブロックの最初の変数のアドレスに書き換え */
   local_addr              = first_address;
   /* ブロックレベルの更新 */
   current_block_level++;
   block_kind[current_block_level] = kind;         /* ブロックの種類をセット */
+  /* ラベルの個数を初期化 */
+  break_label_count[current_block_level]    = 0;
+  continue_label_count[current_block_level] = 0;
 
 }
 
@@ -255,7 +255,7 @@ int getBlockLevel(void)
 /* 現在のブロックの種類を得る */
 BlockKind getBlockKind(void)
 {
-  return block_kind[current_block_level-1];
+  return block_kind[current_block_level];
 }
 
 /* 最後に登録した関数の仮引数の個数を返す */
