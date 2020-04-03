@@ -9,7 +9,7 @@ TARGET=ll1
 all: $(TARGET)
 
 clean:
-	rm -rf *.o
+	rm -rf $(OBJ) $(TARGET)
 
 rebuild:
 	make clean
