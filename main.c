@@ -1,15 +1,22 @@
 #include "compile.h"
+#include <stdio.h>
 
-int main(void)
+int main(int argc, char** argv)
 {
-
-  if (openSource("test.ll")) {
-    initSource();
-    while (1) {
-      nextToken();
-    }
+  if (argc != 2) {
+    fprintf(stderr, "Usage: %s program \n", argv[0]);
+    return 1;
   }
 
-  closeSource();
+  if (openSource(argv[1])) {
+    compile();
+    /* printCodeList(); */
+    execute();
+    closeSource();
+  } else {
+    return 1;
+  }
+
+  return 0;
 }
 

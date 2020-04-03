@@ -175,9 +175,11 @@ void execute(void)
     }
 
     /* デバッグ用, スタックの状態を表示 */
+    /*
        printStack();
        printf("pc : %4d ", pc);
        printCode(pc);
+     */
   } while (pc <= code_size);
   /* } while (pc != 0); */
 
